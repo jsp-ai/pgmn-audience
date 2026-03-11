@@ -1,0 +1,621 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PGMN Ad Launcher</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #F2F3F5;
+            color: #162831;
+            min-height: 100vh;
+        }
+
+        /* ─── Header ─── */
+        .header {
+            background: #162831;
+            padding: 18px 32px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .header h1 {
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: 30px;
+            font-weight: 400;
+            letter-spacing: 2px;
+        }
+        .header h1 .pg { color: #FB041C; }
+        .header h1 .mn { color: #FFFFFF; }
+        .header h1 .sub {
+            font-family: 'DM Sans', sans-serif;
+            font-size: 13px;
+            font-weight: 500;
+            letter-spacing: 0.5px;
+            color: #52657F;
+            margin-left: 10px;
+        }
+        .header .stats {
+            display: flex;
+            gap: 32px;
+        }
+        .header .stat-label {
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: 11px;
+            letter-spacing: 1.5px;
+            text-transform: uppercase;
+            color: #52657F;
+        }
+        .header .stat-value {
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: 24px;
+            color: #FFFFFF;
+            letter-spacing: 1px;
+        }
+
+        /* ─── Layout ─── */
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 24px;
+            display: grid;
+            grid-template-columns: 400px 1fr;
+            gap: 24px;
+        }
+
+        /* ─── Panels ─── */
+        .panel {
+            background: #FFFFFF;
+            border: 1px solid #E0E4E8;
+            border-radius: 10px;
+            padding: 24px;
+        }
+        .panel h2 {
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: 20px;
+            font-weight: 400;
+            letter-spacing: 1.5px;
+            margin-bottom: 20px;
+            color: #162831;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .panel h2 .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #FB041C;
+        }
+
+        /* ─── Form ─── */
+        label {
+            display: block;
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: 13px;
+            font-weight: 400;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            color: #52657F;
+            margin-bottom: 6px;
+            margin-top: 16px;
+        }
+        label:first-of-type { margin-top: 0; }
+        input, select {
+            width: 100%;
+            padding: 10px 14px;
+            background: #F7F8FA;
+            border: 1px solid #D5DAE0;
+            border-radius: 6px;
+            color: #162831;
+            font-family: 'DM Sans', sans-serif;
+            font-size: 14px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        input:focus, select:focus { border-color: #FB041C; }
+        input::placeholder { color: #A0AAB4; }
+        select option { background: #fff; color: #162831; }
+        .row { display: flex; gap: 12px; margin-top: 16px; }
+        .row label { margin-top: 0; }
+        .row > div { flex: 1; }
+        .toggle-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-top: 16px;
+            padding: 12px 14px;
+            background: #F7F8FA;
+            border: 1px solid #E0E4E8;
+            border-radius: 6px;
+        }
+        .toggle-row span { font-size: 14px; color: #52657F; }
+        .toggle {
+            width: 44px;
+            height: 24px;
+            background: #D5DAE0;
+            border-radius: 12px;
+            position: relative;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .toggle.active { background: #FB041C; }
+        .toggle::after {
+            content: '';
+            width: 18px;
+            height: 18px;
+            background: #fff;
+            border-radius: 50%;
+            position: absolute;
+            top: 3px;
+            left: 3px;
+            transition: transform 0.2s;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+        }
+        .toggle.active::after { transform: translateX(20px); }
+
+        /* ─── Buttons ─── */
+        .btn {
+            width: 100%;
+            padding: 14px;
+            margin-top: 24px;
+            border: none;
+            border-radius: 6px;
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: 18px;
+            letter-spacing: 1.5px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .btn-primary {
+            background: #FB041C;
+            color: #fff;
+        }
+        .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 4px 16px rgba(251, 4, 28, 0.25); }
+        .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+        .btn-secondary {
+            background: #162831;
+            color: #fff;
+            margin-top: 12px;
+        }
+        .btn-secondary:hover { background: #1e3a48; }
+
+        /* ─── Campaign Cards ─── */
+        .campaign-list { display: flex; flex-direction: column; gap: 12px; }
+        .campaign-card {
+            background: #F7F8FA;
+            border: 1px solid #E0E4E8;
+            border-radius: 8px;
+            padding: 16px;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+        .campaign-card:hover { border-color: #52657F; box-shadow: 0 2px 8px rgba(22, 40, 49, 0.06); }
+        .campaign-card .top {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 8px;
+        }
+        .campaign-card .name {
+            font-size: 14px;
+            font-weight: 600;
+            color: #162831;
+            max-width: 70%;
+        }
+        .campaign-card .status {
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: 11px;
+            letter-spacing: 1px;
+            padding: 3px 10px;
+            border-radius: 4px;
+            text-transform: uppercase;
+        }
+        .status-active { background: rgba(251, 4, 28, 0.1); color: #FB041C; }
+        .status-paused { background: rgba(200, 160, 0, 0.1); color: #B08C00; }
+        .status-completed { background: rgba(82, 101, 127, 0.1); color: #52657F; }
+        .campaign-card .meta-info {
+            font-size: 12px;
+            color: #52657F;
+        }
+        .campaign-card .actions {
+            display: flex;
+            gap: 8px;
+            margin-top: 12px;
+        }
+        .campaign-card .actions button {
+            flex: 1;
+            padding: 7px;
+            border: 1px solid #D5DAE0;
+            background: #FFFFFF;
+            color: #52657F;
+            border-radius: 5px;
+            font-family: 'DM Sans', sans-serif;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .campaign-card .actions button:hover { border-color: #FB041C; color: #FB041C; background: #FFF5F5; }
+        .campaign-card .actions button.danger:hover { border-color: #d00; color: #d00; background: #FFF0F0; }
+
+        /* ─── AI Panel ─── */
+        .ai-panel {
+            background: #FFFFFF;
+            border: 2px solid #FB041C;
+        }
+        .ai-panel h2 .ai-badge {
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: 12px;
+            letter-spacing: 1px;
+            background: #FB041C;
+            color: #fff;
+            padding: 2px 8px;
+            border-radius: 3px;
+        }
+        .ai-rec {
+            padding: 12px;
+            background: #F7F8FA;
+            border-radius: 6px;
+            margin-bottom: 8px;
+            font-size: 13px;
+            line-height: 1.6;
+            color: #3a4f5c;
+        }
+        .ai-rec .action {
+            font-family: 'Bebas Neue', sans-serif;
+            letter-spacing: 1px;
+            margin-right: 6px;
+        }
+        .action-scale { color: #0a8f6f; }
+        .action-kill { color: #FB041C; }
+        .action-maintain { color: #B08C00; }
+        .action-extend { color: #7c5cbf; }
+
+        /* ─── Utilities ─── */
+        .loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 40px;
+            color: #52657F;
+            font-size: 14px;
+        }
+        .spinner {
+            width: 24px;
+            height: 24px;
+            border: 3px solid #E0E4E8;
+            border-top-color: #FB041C;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin-right: 12px;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .toast {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            padding: 14px 20px;
+            background: #162831;
+            border-radius: 6px;
+            color: #fff;
+            font-family: 'DM Sans', sans-serif;
+            font-size: 14px;
+            transform: translateY(100px);
+            opacity: 0;
+            transition: all 0.3s;
+            z-index: 100;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+        }
+        .toast.show { transform: translateY(0); opacity: 1; }
+        .toast.error { background: #FB041C; color: #fff; }
+        .empty {
+            text-align: center;
+            padding: 40px;
+            color: #8a9bab;
+            font-size: 14px;
+        }
+        @media (max-width: 900px) {
+            .container { grid-template-columns: 1fr; padding: 16px; }
+        }
+        @media (max-width: 600px) {
+            .header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 12px;
+                padding: 16px 20px;
+            }
+            .header h1 { font-size: 26px; }
+            .header h1 .sub { display: block; margin-left: 0; margin-top: 2px; }
+            .header .stats { gap: 20px; width: 100%; }
+            .header .stat-value { font-size: 20px; }
+            .container { padding: 12px; gap: 12px; }
+            .panel { padding: 16px; }
+            .panel h2 { font-size: 18px; }
+            .campaign-card .actions button { padding: 8px 4px; font-size: 11px; }
+            .btn { padding: 12px; font-size: 16px; margin-top: 16px; }
+            .btn-secondary { margin-top: 8px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1><span class="pg">PG</span><span class="mn">MN</span><span class="sub">Ad Launcher</span></h1>
+        <div class="stats">
+            <div>
+                <div class="stat-label">This Week</div>
+                <div class="stat-value" id="weekly-spend">--</div>
+            </div>
+            <div>
+                <div class="stat-label">Engagements</div>
+                <div class="stat-value" id="weekly-eng">--</div>
+            </div>
+            <div>
+                <div class="stat-label">Eng/PHP</div>
+                <div class="stat-value" id="weekly-ratio">--</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <!-- LEFT: Launch Panel -->
+        <div>
+            <div class="panel">
+                <h2><div class="dot"></div> Launch Campaign</h2>
+
+                <label>Content URL or Post Link</label>
+                <input type="text" id="content-url" placeholder="https://facebook.com/pgmn/posts/..." />
+
+                <label>Page ID</label>
+                <input type="text" id="page-id" placeholder="Your Facebook Page ID" value="394530007066390" />
+
+                <label>Post ID (optional)</label>
+                <input type="text" id="post-id" placeholder="Leave empty for link ads" />
+
+                <div class="row">
+                    <div>
+                        <label>Budget (PHP)</label>
+                        <input type="number" id="budget" placeholder="5000" value="3000" />
+                    </div>
+                    <div>
+                        <label>Duration (Days)</label>
+                        <input type="number" id="duration" placeholder="3" value="3" />
+                    </div>
+                </div>
+
+                <label>Platform</label>
+                <select id="platform">
+                    <option value="both">Facebook + Instagram</option>
+                    <option value="facebook_only">Facebook Only</option>
+                    <option value="instagram_only">Instagram Only</option>
+                </select>
+
+                <div class="toggle-row">
+                    <span>A/B Test (split audience)</span>
+                    <div class="toggle" id="ab-toggle" onclick="this.classList.toggle('active')"></div>
+                </div>
+
+                <button class="btn btn-primary" id="launch-btn" onclick="launchCampaign()">
+                    Launch Campaign
+                </button>
+
+                <button class="btn btn-secondary" onclick="runOptimizer()">
+                    Run AI Optimizer
+                </button>
+            </div>
+
+            <!-- AI Recommendations -->
+            <div class="panel ai-panel" style="margin-top: 16px;" id="ai-panel">
+                <h2><span class="ai-badge">AI</span> Recommendations</h2>
+                <div id="ai-recs" class="empty">Click "Run AI Optimizer" to analyze active campaigns</div>
+            </div>
+        </div>
+
+        <!-- RIGHT: Active Campaigns -->
+        <div>
+            <div class="panel">
+                <h2><div class="dot"></div> Active Campaigns</h2>
+                <div id="campaign-list" class="campaign-list">
+                    <div class="loading"><div class="spinner"></div> Loading campaigns...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="toast" id="toast"></div>
+
+    <script>
+        const API = '';
+
+        function showToast(msg, isError = false) {
+            const toast = document.getElementById('toast');
+            toast.textContent = msg;
+            toast.className = `toast show ${isError ? 'error' : ''}`;
+            setTimeout(() => toast.className = 'toast', 3000);
+        }
+
+        function formatNum(n) {
+            if (n >= 1000000) return (n/1000000).toFixed(1) + 'M';
+            if (n >= 1000) return (n/1000).toFixed(1) + 'K';
+            return n.toString();
+        }
+
+        async function loadCampaigns() {
+            try {
+                const res = await fetch(`${API}/api/campaigns`);
+                const data = await res.json();
+                renderCampaigns(data.data || []);
+            } catch (e) {
+                document.getElementById('campaign-list').innerHTML =
+                    '<div class="empty">Could not connect to backend. Make sure the server is running on port 3000.</div>';
+            }
+        }
+
+        async function loadStats() {
+            try {
+                const res = await fetch(`${API}/api/stats`);
+                const data = await res.json();
+                document.getElementById('weekly-spend').textContent = formatNum(data.total_spend) + ' PHP';
+                document.getElementById('weekly-eng').textContent = formatNum(data.total_engagements);
+                document.getElementById('weekly-ratio').textContent = data.overall_eng_per_peso;
+            } catch(e) {}
+        }
+
+        function renderCampaigns(campaigns) {
+            const list = document.getElementById('campaign-list');
+            if (!campaigns.length) {
+                list.innerHTML = '<div class="empty">No campaigns found</div>';
+                return;
+            }
+
+            list.innerHTML = campaigns.map(c => {
+                const statusClass = c.status === 'ACTIVE' ? 'status-active' :
+                                   c.status === 'PAUSED' ? 'status-paused' : 'status-completed';
+                const budget = c.lifetime_budget ? (parseInt(c.lifetime_budget)/100).toLocaleString() :
+                              c.daily_budget ? (parseInt(c.daily_budget)/100).toLocaleString() + '/day' : '--';
+                return `
+                    <div class="campaign-card">
+                        <div class="top">
+                            <div class="name">${c.name}</div>
+                            <span class="status ${statusClass}">${c.status}</span>
+                        </div>
+                        <div class="meta-info">
+                            Budget: ${budget} PHP
+                            ${c.start_time ? ' | Started: ' + new Date(c.start_time).toLocaleDateString() : ''}
+                        </div>
+                        <div class="actions">
+                            ${c.status === 'ACTIVE' ?
+                                `<button onclick="updateStatus('${c.id}', 'pause')">Pause</button>` :
+                                `<button onclick="updateStatus('${c.id}', 'activate')">Activate</button>`
+                            }
+                            <button onclick="viewInsights('${c.id}')">Insights</button>
+                            <button class="danger" onclick="updateStatus('${c.id}', 'archive')">Archive</button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        async function launchCampaign() {
+            const btn = document.getElementById('launch-btn');
+            btn.disabled = true;
+            btn.textContent = 'Launching...';
+
+            const body = {
+                content_url: document.getElementById('content-url').value,
+                budget_php: parseFloat(document.getElementById('budget').value),
+                duration_days: parseInt(document.getElementById('duration').value),
+                page_id: document.getElementById('page-id').value,
+                post_id: document.getElementById('post-id').value || null,
+                platform: document.getElementById('platform').value,
+                ab_test: document.getElementById('ab-toggle').classList.contains('active'),
+            };
+
+            if (!body.content_url || !body.page_id) {
+                showToast('Content URL and Page ID are required', true);
+                btn.disabled = false;
+                btn.textContent = 'Launch Campaign';
+                return;
+            }
+
+            try {
+                const res = await fetch(`${API}/api/launch`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(body)
+                });
+                const data = await res.json();
+
+                if (res.ok) {
+                    showToast(`Campaign created! ID: ${data.data.campaign_id}`);
+                    loadCampaigns();
+                } else {
+                    showToast(data.detail || 'Launch failed', true);
+                }
+            } catch(e) {
+                showToast('Network error — is the backend running?', true);
+            }
+
+            btn.disabled = false;
+            btn.textContent = 'Launch Campaign';
+        }
+
+        async function updateStatus(campaignId, action) {
+            try {
+                const res = await fetch(`${API}/api/campaigns/status`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ campaign_id: campaignId, action })
+                });
+                if (res.ok) {
+                    showToast(`Campaign ${action}d`);
+                    loadCampaigns();
+                }
+            } catch(e) {
+                showToast('Failed to update status', true);
+            }
+        }
+
+        async function viewInsights(campaignId) {
+            try {
+                const res = await fetch(`${API}/api/insights?id=${campaignId}`);
+                const data = await res.json();
+                const msg = data.campaign_name ?
+                    `${data.campaign_name}\nSpend: ${data.spend} PHP\nEngagements: ${formatNum(data.engagements)}\nEng/PHP: ${data.eng_per_peso}\nVirality: ${(data.virality * 100).toFixed(1)}%` :
+                    'No insight data yet';
+                alert(msg);
+            } catch(e) {
+                showToast('Could not load insights', true);
+            }
+        }
+
+        async function runOptimizer() {
+            const panel = document.getElementById('ai-recs');
+            panel.innerHTML = '<div class="loading"><div class="spinner"></div> Claude is analyzing campaigns...</div>';
+
+            try {
+                const res = await fetch(`${API}/api/optimize?dry_run=true`);
+                const data = await res.json();
+                const ai = data.ai_analysis || {};
+                const recs = ai.recommendations || [];
+
+                let html = '';
+                if (ai.summary) {
+                    html += `<div class="ai-rec" style="border-left: 3px solid #FB041C;">${ai.summary}</div>`;
+                }
+                recs.forEach(r => {
+                    const cls = r.action === 'SCALE' ? 'action-scale' :
+                               r.action === 'KILL' ? 'action-kill' :
+                               r.action === 'EXTEND' ? 'action-extend' : 'action-maintain';
+                    html += `<div class="ai-rec">
+                        <span class="action ${cls}">${r.action}</span>
+                        <strong>${r.campaign_name || ''}</strong><br/>
+                        ${r.reason || ''}
+                        ${r.new_budget ? `<br/>New budget: ${r.new_budget} PHP` : ''}
+                    </div>`;
+                });
+                if (ai.budget_strategy) {
+                    html += `<div class="ai-rec" style="border-left: 3px solid #7c5cbf;"><strong>Budget Strategy:</strong> ${ai.budget_strategy}</div>`;
+                }
+                if (ai.ab_test_suggestion) {
+                    html += `<div class="ai-rec" style="border-left: 3px solid #B08C00;"><strong>A/B Test:</strong> ${ai.ab_test_suggestion}</div>`;
+                }
+                panel.innerHTML = html || '<div class="empty">No recommendations generated</div>';
+            } catch(e) {
+                panel.innerHTML = `<div class="empty" style="color:#FB041C;">Error: ${e.message}. Is the backend running?</div>`;
+            }
+        }
+
+        // Load on start
+        loadCampaigns();
+        loadStats();
+        // Auto-refresh every 60 seconds
+        setInterval(loadCampaigns, 60000);
+        setInterval(loadStats, 60000);
+    </script>
+</body>
+</html>
