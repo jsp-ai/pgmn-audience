@@ -347,16 +347,16 @@
         <h1><span class="pg">PG</span><span class="mn">MN</span><span class="sub">Ad Launcher</span></h1>
         <div class="stats">
             <div>
-                <div class="stat-label">This Week</div>
-                <div class="stat-value" id="weekly-spend">--</div>
+                <div class="stat-label">Campaigns Live</div>
+                <div class="stat-value" id="stat-live">--</div>
             </div>
             <div>
-                <div class="stat-label">Engagements</div>
-                <div class="stat-value" id="weekly-eng">--</div>
+                <div class="stat-label">Total Daily Spend</div>
+                <div class="stat-value" id="stat-daily">--</div>
             </div>
             <div>
-                <div class="stat-label">Eng/PHP</div>
-                <div class="stat-value" id="weekly-ratio">--</div>
+                <div class="stat-label">Total Monthly Spend</div>
+                <div class="stat-value" id="stat-monthly">--</div>
             </div>
         </div>
     </div>
@@ -459,9 +459,9 @@
             try {
                 const res = await fetch(`${API}/api/stats`);
                 const data = await res.json();
-                document.getElementById('weekly-spend').textContent = formatNum(data.total_spend) + ' PHP';
-                document.getElementById('weekly-eng').textContent = formatNum(data.total_engagements);
-                document.getElementById('weekly-ratio').textContent = data.overall_eng_per_peso;
+                document.getElementById('stat-live').textContent = data.active_count || 0;
+                document.getElementById('stat-daily').textContent = formatNum(data.total_daily_spend) + ' PHP';
+                document.getElementById('stat-monthly').textContent = formatNum(data.total_monthly_spend) + ' PHP';
             } catch(e) {}
         }
 

@@ -93,24 +93,29 @@ async function getCampaignInsights(campaignId) {
 }
 
 async function getStats() {
-  const fields = [
-    'campaign_name', 'campaign_id', 'spend', 'impressions', 'reach',
-    'actions', 'cost_per_action_type', 'cpm', 'ctr', 'clicks'
-  ].join(',');
-  const result = await metaGet(`${AD_ACCOUNT_ID}/insights`, {
-    fields, date_preset: 'last_7d', level: 'campaign', limit: '50'
+  const active = await metaGet(`${AD_ACCOUNT_ID}/campaigns`, {
+    fields: 'id',
+    effective_status: JSON.stringify(['ACTIVE']),
+    limit: '100'
   });
-  const campaigns = (result.data || []).map(calculateMetrics);
-  campaigns.sort((a, b) => b.eng_per_peso - a.eng_per_peso);
-  const totalSpend = campaigns.reduce((s, c) => s + c.spend, 0);
-  const totalEng = campaigns.reduce((s, c) => s + c.engagements, 0);
+  const activeCount = (active.data || []).length;
+
+  const todayInsights = await metaGet(`${AD_ACCOUNT_ID}/insights`, {
+    fields: 'spend', date_preset: 'today'
+  });
+  const todaySpend = todayInsights.data && todayInsights.data[0]
+    ? parseFloat(todayInsights.data[0].spend || 0) : 0;
+
+  const monthInsights = await metaGet(`${AD_ACCOUNT_ID}/insights`, {
+    fields: 'spend', date_preset: 'this_month'
+  });
+  const monthSpend = monthInsights.data && monthInsights.data[0]
+    ? parseFloat(monthInsights.data[0].spend || 0) : 0;
+
   return {
-    total_spend: totalSpend,
-    total_engagements: totalEng,
-    overall_eng_per_peso: totalSpend > 0 ? Math.round(totalEng / totalSpend * 100) / 100 : 0,
-    campaign_count: campaigns.length,
-    top_performers: campaigns.slice(0, 5),
-    worst_performers: campaigns.slice(-3)
+    active_count: activeCount,
+    total_daily_spend: Math.round(todaySpend * 100) / 100,
+    total_monthly_spend: Math.round(monthSpend * 100) / 100
   };
 }
 
