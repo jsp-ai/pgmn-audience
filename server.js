@@ -67,10 +67,40 @@ function metaPost(endpoint, body = {}) {
 // ─── API Route Handlers ───
 
 async function getCampaigns(limit = 30) {
-  return metaGet(`${AD_ACCOUNT_ID}/campaigns`, {
+  const campaigns = await metaGet(`${AD_ACCOUNT_ID}/campaigns`, {
     fields: 'name,status,objective,start_time,stop_time,daily_budget,lifetime_budget,budget_remaining',
     limit: String(limit)
   });
+
+  const insightFields = [
+    'campaign_id', 'campaign_name', 'spend', 'impressions', 'reach',
+    'actions', 'clicks', 'video_avg_time_watched_actions'
+  ].join(',');
+  const campIds = (campaigns.data || []).map(c => c.id);
+  const insights = await metaGet(`${AD_ACCOUNT_ID}/insights`, {
+    fields: insightFields, date_preset: 'maximum', level: 'campaign',
+    filtering: JSON.stringify([{ field: 'campaign.id', operator: 'IN', value: campIds }]),
+    limit: '100'
+  });
+
+  const insightsMap = {};
+  for (const row of (insights.data || [])) {
+    const spend = parseFloat(row.spend || 0);
+    let engagements = 0, videoViews = 0;
+    for (const action of (row.actions || [])) {
+      if (action.action_type === 'post_engagement') engagements = parseInt(action.value);
+      if (action.action_type === 'video_view') videoViews = parseInt(action.value);
+    }
+    insightsMap[row.campaign_id] = {
+      spend, impressions: parseInt(row.impressions || 0),
+      reach: parseInt(row.reach || 0), clicks: parseInt(row.clicks || 0),
+      engagements, video_views: videoViews,
+      eng_per_peso: spend > 0 ? Math.round(engagements / spend * 100) / 100 : 0
+    };
+  }
+
+  const enriched = (campaigns.data || []).map(c => ({ ...c, insights: insightsMap[c.id] || null }));
+  return { data: enriched, paging: campaigns.paging };
 }
 
 async function getActiveCampaigns() {

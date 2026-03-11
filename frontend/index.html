@@ -222,6 +222,30 @@
             font-size: 12px;
             color: #52657F;
         }
+        .campaign-card .metrics {
+            display: grid;
+            grid-template-columns: repeat(6, 1fr);
+            gap: 4px;
+            margin-top: 12px;
+            padding: 10px 0;
+            border-top: 1px solid #E0E4E8;
+            border-bottom: 1px solid #E0E4E8;
+        }
+        .campaign-card .metric { text-align: center; }
+        .campaign-card .metric .val {
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: 16px;
+            color: #162831;
+            letter-spacing: 0.5px;
+        }
+        .campaign-card .metric .val.highlight { color: #FB041C; }
+        .campaign-card .metric .lbl {
+            font-size: 9px;
+            color: #8a9bab;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-top: 1px;
+        }
         .campaign-card .actions {
             display: flex;
             gap: 8px;
@@ -477,6 +501,9 @@
                                    c.status === 'PAUSED' ? 'status-paused' : 'status-completed';
                 const budget = c.lifetime_budget ? (parseInt(c.lifetime_budget)/100).toLocaleString() :
                               c.daily_budget ? (parseInt(c.daily_budget)/100).toLocaleString() + '/day' : '--';
+                const i = c.insights || {};
+                const engPeso = i.eng_per_peso || 0;
+                const epClass = engPeso >= 10 ? 'highlight' : '';
                 return `
                     <div class="campaign-card">
                         <div class="top">
@@ -484,15 +511,21 @@
                             <span class="status ${statusClass}">${c.status}</span>
                         </div>
                         <div class="meta-info">
-                            Budget: ${budget} PHP
-                            ${c.start_time ? ' | Started: ' + new Date(c.start_time).toLocaleDateString() : ''}
+                            Started: ${c.start_time ? new Date(c.start_time).toLocaleDateString() : '--'}
+                        </div>
+                        <div class="metrics">
+                            <div class="metric"><div class="val">${budget}</div><div class="lbl">Budget</div></div>
+                            <div class="metric"><div class="val">${i.spend ? formatNum(i.spend) : '--'}</div><div class="lbl">Spent</div></div>
+                            <div class="metric"><div class="val">${i.reach ? formatNum(i.reach) : '--'}</div><div class="lbl">Reach</div></div>
+                            <div class="metric"><div class="val">${i.video_views ? formatNum(i.video_views) : '--'}</div><div class="lbl">Views</div></div>
+                            <div class="metric"><div class="val">${i.engagements ? formatNum(i.engagements) : '--'}</div><div class="lbl">Engage</div></div>
+                            <div class="metric"><div class="val ${epClass}">${engPeso || '--'}</div><div class="lbl">Eng/PHP</div></div>
                         </div>
                         <div class="actions">
                             ${c.status === 'ACTIVE' ?
                                 `<button onclick="updateStatus('${c.id}', 'pause')">Pause</button>` :
                                 `<button onclick="updateStatus('${c.id}', 'activate')">Activate</button>`
                             }
-                            <button onclick="viewInsights('${c.id}')">Insights</button>
                             <button class="danger" onclick="updateStatus('${c.id}', 'archive')">Archive</button>
                         </div>
                     </div>
