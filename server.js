@@ -72,17 +72,31 @@ async function getCampaigns(limit = 30) {
     limit: String(limit)
   });
 
-  const insightFields = [
-    'campaign_id', 'campaign_name', 'spend', 'impressions', 'reach',
-    'actions', 'clicks', 'video_avg_time_watched_actions'
-  ].join(',');
   const campIds = (campaigns.data || []).map(c => c.id);
+  if (!campIds.length) return { data: [], paging: campaigns.paging };
+
+  // Adset budgets
+  const adsets = await metaGet(`${AD_ACCOUNT_ID}/adsets`, {
+    fields: 'campaign_id,lifetime_budget,daily_budget',
+    filtering: JSON.stringify([{ field: 'campaign.id', operator: 'IN', value: campIds }]),
+    limit: '200'
+  });
+  const budgetMap = {};
+  for (const as of (adsets.data || [])) {
+    if (!budgetMap[as.campaign_id]) budgetMap[as.campaign_id] = 0;
+    if (as.lifetime_budget) budgetMap[as.campaign_id] += parseInt(as.lifetime_budget) / 100;
+    else if (as.daily_budget) budgetMap[as.campaign_id] += parseInt(as.daily_budget) / 100;
+  }
+
+  // Insights
+  const insightFields = [
+    'campaign_id', 'campaign_name', 'spend', 'impressions', 'reach', 'actions', 'clicks'
+  ].join(',');
   const insights = await metaGet(`${AD_ACCOUNT_ID}/insights`, {
     fields: insightFields, date_preset: 'maximum', level: 'campaign',
     filtering: JSON.stringify([{ field: 'campaign.id', operator: 'IN', value: campIds }]),
     limit: '100'
   });
-
   const insightsMap = {};
   for (const row of (insights.data || [])) {
     const spend = parseFloat(row.spend || 0);
@@ -99,7 +113,21 @@ async function getCampaigns(limit = 30) {
     };
   }
 
-  const enriched = (campaigns.data || []).map(c => ({ ...c, insights: insightsMap[c.id] || null }));
+  const now = new Date();
+  const enriched = (campaigns.data || []).map(c => {
+    let totalBudget = null;
+    if (c.lifetime_budget) totalBudget = parseInt(c.lifetime_budget) / 100;
+    else if (c.daily_budget) totalBudget = parseInt(c.daily_budget) / 100;
+    else if (budgetMap[c.id]) totalBudget = budgetMap[c.id];
+    return { ...c, total_budget: totalBudget, insights: insightsMap[c.id] || null };
+  }).filter(c => {
+    // Exclude campaigns past their end date
+    if (c.stop_time && new Date(c.stop_time) < now) return false;
+    // Exclude campaigns that have spent 100% of budget
+    const spent = c.insights ? c.insights.spend : 0;
+    if (c.total_budget && spent >= c.total_budget) return false;
+    return true;
+  });
   return { data: enriched, paging: campaigns.paging };
 }
 

@@ -18,7 +18,21 @@ module.exports = async function handler(req, res) {
       return res.status(200).json({ data: [], paging: campaigns.paging });
     }
 
-    // 2. Get insights filtered to only these campaign IDs
+    // 2. Get adset budgets (summed per campaign)
+    const adsets = await metaGet(`${AD_ACCOUNT_ID}/adsets`, {
+      fields: 'campaign_id,lifetime_budget,daily_budget',
+      filtering: JSON.stringify([{ field: 'campaign.id', operator: 'IN', value: campIds }]),
+      limit: '200'
+    });
+    const budgetMap = {};
+    for (const as of (adsets.data || [])) {
+      const cid = as.campaign_id;
+      if (!budgetMap[cid]) budgetMap[cid] = 0;
+      if (as.lifetime_budget) budgetMap[cid] += parseInt(as.lifetime_budget) / 100;
+      else if (as.daily_budget) budgetMap[cid] += parseInt(as.daily_budget) / 100;
+    }
+
+    // 3. Get insights filtered to only these campaign IDs
     const insightFields = [
       'campaign_id', 'campaign_name', 'spend', 'impressions', 'reach',
       'actions', 'clicks'
@@ -31,7 +45,7 @@ module.exports = async function handler(req, res) {
       limit: '100'
     });
 
-    // 3. Build insights lookup by campaign_id
+    // 4. Build insights lookup by campaign_id
     const insightsMap = {};
     for (const row of (insights.data || [])) {
       const spend = parseFloat(row.spend || 0);
@@ -51,11 +65,27 @@ module.exports = async function handler(req, res) {
       };
     }
 
-    // 4. Merge insights into campaign data
-    const enriched = (campaigns.data || []).map(c => ({
-      ...c,
-      insights: insightsMap[c.id] || null
-    }));
+    // 5. Merge everything into campaign data
+    const now = new Date();
+    const enriched = (campaigns.data || []).map(c => {
+      let totalBudget = null;
+      if (c.lifetime_budget) totalBudget = parseInt(c.lifetime_budget) / 100;
+      else if (c.daily_budget) totalBudget = parseInt(c.daily_budget) / 100;
+      else if (budgetMap[c.id]) totalBudget = budgetMap[c.id];
+
+      return {
+        ...c,
+        total_budget: totalBudget,
+        insights: insightsMap[c.id] || null
+      };
+    }).filter(c => {
+      // Exclude campaigns past their end date
+      if (c.stop_time && new Date(c.stop_time) < now) return false;
+      // Exclude campaigns that have spent 100% of budget
+      const spent = c.insights ? c.insights.spend : 0;
+      if (c.total_budget && spent >= c.total_budget) return false;
+      return true;
+    });
 
     res.status(200).json({ data: enriched, paging: campaigns.paging });
   } catch (err) {
