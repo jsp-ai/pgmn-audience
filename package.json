@@ -4,5 +4,7 @@
   "scripts": {
     "dev": "node server.js"
   },
-  "dependencies": {}
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.78.0"
+  }
 }
