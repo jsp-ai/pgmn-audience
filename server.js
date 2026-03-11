@@ -152,11 +152,49 @@ async function getCampaignInsights(campaignId) {
 
 async function getStats() {
   const active = await metaGet(`${AD_ACCOUNT_ID}/campaigns`, {
-    fields: 'id',
+    fields: 'id,stop_time,daily_budget,lifetime_budget',
     effective_status: JSON.stringify(['ACTIVE']),
     limit: '100'
   });
-  const activeCount = (active.data || []).length;
+  const campaigns = active.data || [];
+  const campIds = campaigns.map(c => c.id);
+
+  let budgetMap = {};
+  let spendMap = {};
+  if (campIds.length) {
+    const adsets = await metaGet(`${AD_ACCOUNT_ID}/adsets`, {
+      fields: 'campaign_id,lifetime_budget,daily_budget',
+      filtering: JSON.stringify([{ field: 'campaign.id', operator: 'IN', value: campIds }]),
+      limit: '200'
+    });
+    for (const as of (adsets.data || [])) {
+      if (!budgetMap[as.campaign_id]) budgetMap[as.campaign_id] = 0;
+      if (as.lifetime_budget) budgetMap[as.campaign_id] += parseInt(as.lifetime_budget) / 100;
+      else if (as.daily_budget) budgetMap[as.campaign_id] += parseInt(as.daily_budget) / 100;
+    }
+    const spendInsights = await metaGet(`${AD_ACCOUNT_ID}/insights`, {
+      fields: 'campaign_id,spend',
+      date_preset: 'maximum',
+      level: 'campaign',
+      filtering: JSON.stringify([{ field: 'campaign.id', operator: 'IN', value: campIds }]),
+      limit: '200'
+    });
+    for (const row of (spendInsights.data || [])) {
+      spendMap[row.campaign_id] = parseFloat(row.spend || 0);
+    }
+  }
+
+  const now = new Date();
+  const activeCount = campaigns.filter(c => {
+    if (c.stop_time && new Date(c.stop_time) < now) return false;
+    let totalBudget = null;
+    if (c.lifetime_budget) totalBudget = parseInt(c.lifetime_budget) / 100;
+    else if (c.daily_budget) totalBudget = parseInt(c.daily_budget) / 100;
+    else if (budgetMap[c.id]) totalBudget = budgetMap[c.id];
+    const spent = spendMap[c.id] || 0;
+    if (totalBudget && spent >= totalBudget) return false;
+    return true;
+  }).length;
 
   const todayInsights = await metaGet(`${AD_ACCOUNT_ID}/insights`, {
     fields: 'spend', date_preset: 'today'

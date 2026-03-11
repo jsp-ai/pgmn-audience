@@ -7,13 +7,53 @@ module.exports = async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
 
   try {
-    // Get active campaign count
+    // Get active campaigns with stop_time and budget info
     const active = await metaGet(`${AD_ACCOUNT_ID}/campaigns`, {
-      fields: 'id',
+      fields: 'id,stop_time,daily_budget,lifetime_budget',
       effective_status: JSON.stringify(['ACTIVE']),
       limit: '100'
     });
-    const activeCount = (active.data || []).length;
+    const campaigns = active.data || [];
+    const campIds = campaigns.map(c => c.id);
+
+    // Get adset budgets and insights to filter out completed campaigns
+    let budgetMap = {};
+    let spendMap = {};
+    if (campIds.length) {
+      const adsets = await metaGet(`${AD_ACCOUNT_ID}/adsets`, {
+        fields: 'campaign_id,lifetime_budget,daily_budget',
+        filtering: JSON.stringify([{ field: 'campaign.id', operator: 'IN', value: campIds }]),
+        limit: '200'
+      });
+      for (const as of (adsets.data || [])) {
+        if (!budgetMap[as.campaign_id]) budgetMap[as.campaign_id] = 0;
+        if (as.lifetime_budget) budgetMap[as.campaign_id] += parseInt(as.lifetime_budget) / 100;
+        else if (as.daily_budget) budgetMap[as.campaign_id] += parseInt(as.daily_budget) / 100;
+      }
+
+      const insights = await metaGet(`${AD_ACCOUNT_ID}/insights`, {
+        fields: 'campaign_id,spend',
+        date_preset: 'maximum',
+        level: 'campaign',
+        filtering: JSON.stringify([{ field: 'campaign.id', operator: 'IN', value: campIds }]),
+        limit: '200'
+      });
+      for (const row of (insights.data || [])) {
+        spendMap[row.campaign_id] = parseFloat(row.spend || 0);
+      }
+    }
+
+    const now = new Date();
+    const activeCount = campaigns.filter(c => {
+      if (c.stop_time && new Date(c.stop_time) < now) return false;
+      let totalBudget = null;
+      if (c.lifetime_budget) totalBudget = parseInt(c.lifetime_budget) / 100;
+      else if (c.daily_budget) totalBudget = parseInt(c.daily_budget) / 100;
+      else if (budgetMap[c.id]) totalBudget = budgetMap[c.id];
+      const spent = spendMap[c.id] || 0;
+      if (totalBudget && spent >= totalBudget) return false;
+      return true;
+    }).length;
 
     // Get daily spend (today)
     const todayInsights = await metaGet(`${AD_ACCOUNT_ID}/insights`, {
