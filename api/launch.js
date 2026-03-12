@@ -7,11 +7,17 @@ module.exports = async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
 
   try {
-    const { content_url, budget_php, duration_days, page_id, post_id, campaign_name, platform, ab_test, countries } = req.body;
-    const name = campaign_name || `PGMN Burst - ${budget_php}PHP ${duration_days}d`;
+    const { budget_php, duration_days, page_id, post_id, campaign_name, platform, ab_test, countries, content_type, object_story_id } = req.body;
+    const name = campaign_name || `PGMN Campaign - ${budget_php}PHP ${duration_days}d`;
 
+    // Determine objective & optimization based on content type
+    const isReel = content_type === 'reel';
+    const objective = isReel ? 'OUTCOME_AWARENESS' : 'OUTCOME_ENGAGEMENT';
+    const optimizationGoal = isReel ? 'THRUPLAY' : 'POST_ENGAGEMENT';
+
+    // 1. Create campaign
     const campaign = await metaPost(`${AD_ACCOUNT_ID}/campaigns`, {
-      name, objective: 'OUTCOME_ENGAGEMENT', status: 'PAUSED',
+      name, objective, status: 'PAUSED',
       special_ad_categories: '[]'
     });
     if (campaign.error) return res.status(400).json(campaign);
@@ -26,27 +32,44 @@ module.exports = async function handler(req, res) {
     else if (platform === 'instagram_only') targeting.publisher_platforms = ['instagram'];
     else targeting.publisher_platforms = ['facebook', 'instagram'];
 
-    const results = { campaign_id: campaign.id, adsets: [], ads: [] };
+    const results = { campaign_id: campaign.id, adsets: [], ads: [], objective, optimization_goal: optimizationGoal };
+
+    // Use resolved object_story_id if provided, otherwise construct from page_id + post_id
+    const storyId = object_story_id || (page_id && post_id ? `${page_id}_${post_id}` : null);
 
     const createAdSet = async (adsetName, budgetPhp, extraTargeting = {}) => {
       const t = { ...targeting, ...extraTargeting };
       const adset = await metaPost(`${AD_ACCOUNT_ID}/adsets`, {
         campaign_id: campaign.id, name: adsetName,
         lifetime_budget: String(Math.round(budgetPhp * 100)),
-        optimization_goal: 'POST_ENGAGEMENT', billing_event: 'IMPRESSIONS',
+        optimization_goal: optimizationGoal, billing_event: 'IMPRESSIONS',
         start_time: fmt(now), end_time: fmt(end),
         targeting: JSON.stringify(t), status: 'PAUSED'
       });
+      if (adset.error) {
+        results.adsets.push({ error: adset.error });
+        return adset;
+      }
       results.adsets.push(adset);
-      if (post_id) {
+
+      // Create ad creative and ad
+      if (storyId) {
         const creative = await metaPost(`${AD_ACCOUNT_ID}/adcreatives`, {
-          name: `${adsetName} - Creative`, object_story_id: `${page_id}_${post_id}`
+          name: `${adsetName} - Creative`, object_story_id: storyId
         });
+        if (creative.error) {
+          results.ads.push({ error: creative.error });
+          return adset;
+        }
         const ad = await metaPost(`${AD_ACCOUNT_ID}/ads`, {
           name: `${adsetName} - Ad`, adset_id: adset.id,
           creative: JSON.stringify({ creative_id: creative.id }), status: 'PAUSED'
         });
-        results.ads.push(ad);
+        if (ad.error) {
+          results.ads.push({ error: ad.error });
+        } else {
+          results.ads.push(ad);
+        }
       }
       return adset;
     };

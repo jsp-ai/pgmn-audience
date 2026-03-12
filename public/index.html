@@ -913,8 +913,10 @@
 
         function extractPostIdFromUrl(url) {
             if (!url) return null;
+            // Instagram: /p/SHORTCODE/ or /reel/SHORTCODE/
             const igMatch = url.match(/instagram\.com\/(?:p|reel)\/([A-Za-z0-9_-]+)/);
             if (igMatch) return igMatch[1];
+            // Facebook: /posts/ID or /videos/ID or story_fbid=ID or /pfbid...
             const fbPostMatch = url.match(/\/posts\/(\d+)/);
             if (fbPostMatch) return fbPostMatch[1];
             const fbVideoMatch = url.match(/\/videos\/(\d+)/);
@@ -927,8 +929,10 @@
         }
 
         function generateCampaignName(postCaption, budgetPhp, durationDays, platform) {
+            // Take first ~6 words of caption as description
             const words = (postCaption || '').replace(/[^\w\s'-]/g, '').trim().split(/\s+/).filter(Boolean);
             const desc = words.slice(0, 6).join(' ') || 'Untitled';
+            // Format budget: 1000 → 1k, 500 → 500
             const budgetStr = budgetPhp >= 1000 ? (budgetPhp / 1000) + 'k' : String(budgetPhp);
             const durStr = durationDays === 1 ? '1 day' : durationDays + ' days';
             const platStr = platform === 'instagram_only' ? 'Instagram'
@@ -949,27 +953,45 @@
             const abTest = document.getElementById('ab-toggle').classList.contains('active');
             const countries = getSelectedCountries();
 
+            // Resolve post_id: from card selection, URL extraction, or postsLookup match
             let postId = document.getElementById('post-id').value || null;
             let postCaption = '';
 
             if (!postId && contentUrl) {
+                // Try to match URL against loaded posts first
                 for (const [pid, post] of Object.entries(postsLookup)) {
                     if (contentUrl.includes(pid) || (post.id && contentUrl.includes(post.id))) {
                         postId = pid;
                         break;
                     }
                 }
+                // If still no match, extract from URL pattern
                 if (!postId) {
                     postId = extractPostIdFromUrl(contentUrl);
                 }
             }
 
-            if (postId && postsLookup[postId]) {
+            // Use resolved data if available
+            let objectStoryId = null;
+            let contentType = 'post'; // default
+            if (resolvedPost) {
+                if (resolvedPost.resolved) {
+                    postId = resolvedPost.post_id;
+                    objectStoryId = resolvedPost.object_story_id;
+                    postCaption = resolvedPost.caption || '';
+                }
+                contentType = resolvedPost.content_type || 'post';
+            } else if (postId && postsLookup[postId]) {
                 postCaption = postsLookup[postId].message || '';
             }
 
-            if (!postId) {
-                showToast('Select a post or paste a valid post URL', true);
+            // Auto-detect content type from URL as fallback
+            if (!resolvedPost && contentUrl) {
+                if (/\/(reel|reels)\//i.test(contentUrl) || /\/videos\//i.test(contentUrl)) contentType = 'reel';
+            }
+
+            if (!postId && !objectStoryId) {
+                showToast('Paste a valid post URL to launch', true);
                 btn.disabled = false;
                 btn.textContent = 'Launch Campaign';
                 return;
@@ -983,7 +1005,9 @@
                 duration_days: durationDays,
                 page_id: '394530007066390',
                 post_id: postId,
+                object_story_id: objectStoryId,
                 campaign_name: campaignName,
+                content_type: contentType,
                 platform,
                 ab_test: abTest,
                 countries,
@@ -1157,9 +1181,10 @@
             detail.classList.add('open');
         }
 
-        // ─── Post Picker (split by platform) ───
+        // ─── Post Resolution ───
         let selectedPostId = null;
         let postsLookup = {}; // post_id → full post data for preview
+        let resolvedPost = null; // resolved data from /api/resolve-post
 
         function renderPostCards(posts) {
             return posts.map(p => {
@@ -1261,63 +1286,91 @@
             }
         }
 
+        let resolveTimeout = null;
         function previewFromUrl(url) {
             const preview = document.getElementById('post-preview');
             const display = document.getElementById('post-id-display');
+            resolvedPost = null;
+
             if (!url.trim()) {
-                if (!selectedPostId) {
-                    preview.classList.remove('open');
-                    display.textContent = 'No post selected — scroll to pick one';
-                    display.style.color = '#8a9bab';
-                    display.style.display = 'block';
-                }
+                selectedPostId = null;
+                preview.classList.remove('open');
+                display.textContent = 'Paste a post link above to preview';
+                display.style.color = '#8a9bab';
+                display.style.display = 'block';
                 return;
             }
 
-            let platform = 'facebook';
-            if (url.includes('instagram.com')) platform = 'instagram';
+            // Instant local preview while resolving
+            const isReel = /\/(reel|reels)\//i.test(url) || /\/videos\//i.test(url);
+            const isIG = url.includes('instagram.com');
+            const platClass = isIG ? 'plat-instagram' : 'plat-facebook';
+            const platLabel = isIG ? 'INSTAGRAM' : 'FACEBOOK';
+            const typeLabel = isReel ? 'REEL' : 'POST';
+            const typeBadge = isReel
+                ? '<span style="background:#6c5ce7;color:#fff;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;margin-left:6px;">VIDEO VIEWS · THRUPLAY</span>'
+                : '<span style="background:#00b894;color:#fff;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;margin-left:6px;">POST ENGAGEMENT</span>';
 
-            let matched = null;
-            for (const [pid, post] of Object.entries(postsLookup)) {
-                if (url.includes(pid) || (post.id && url.includes(post.id))) {
-                    matched = post;
-                    break;
-                }
-            }
-
-            const platClass = platform === 'instagram' ? 'plat-instagram' : 'plat-facebook';
-            const platLabel = platform === 'instagram' ? 'INSTAGRAM' : 'FACEBOOK';
-
-            if (matched) {
-                const thumbHtml = matched.thumbnail
-                    ? `<img class="preview-thumb" src="${matched.thumbnail}" alt="" />`
-                    : '';
-                preview.innerHTML = `
-                    ${thumbHtml}
-                    <div class="preview-body">
-                        <span class="preview-platform ${platClass}">${platLabel}</span>
-                        <div class="preview-caption">${matched.message || 'No caption'}</div>
-                        <div class="preview-id">Post ID: ${matched.post_id}</div>
-                    </div>
-                `;
-                selectedPostId = matched.post_id;
-                document.getElementById('post-id').value = matched.post_id;
-            } else {
-                const extractedId = extractPostIdFromUrl(url);
-                if (extractedId) {
-                    selectedPostId = extractedId;
-                    document.getElementById('post-id').value = extractedId;
-                }
-                preview.innerHTML = `
-                    <div class="preview-body">
-                        <span class="preview-platform ${platClass}">${platLabel}</span>
-                        <div class="preview-caption" style="word-break:break-all;">${url}</div>
-                        <div class="preview-id" style="color:#52657F;">${extractedId ? 'Post ID: ' + extractedId : 'Could not extract Post ID'}</div>
-                    </div>
-                `;
-            }
+            preview.innerHTML = `
+                <div class="preview-body">
+                    <span class="preview-platform ${platClass}">${platLabel} · ${typeLabel}</span>${typeBadge}
+                    <div class="preview-caption" style="word-break:break-all;margin-top:8px;">${url}</div>
+                    <div class="preview-id" style="color:#8a9bab;">Resolving post ID...</div>
+                </div>
+            `;
             preview.classList.add('open');
             display.style.display = 'none';
+
+            // Debounce the API call
+            clearTimeout(resolveTimeout);
+            resolveTimeout = setTimeout(async () => {
+                try {
+                    const res = await fetch(`${API}/api/resolve-post?url=${encodeURIComponent(url)}`);
+                    const data = await res.json();
+                    resolvedPost = data;
+
+                    if (data.resolved) {
+                        selectedPostId = data.post_id;
+                        document.getElementById('post-id').value = data.post_id;
+                        const thumbHtml = data.thumbnail ? `<img class="preview-thumb" src="${data.thumbnail}" alt="" />` : '';
+                        preview.innerHTML = `
+                            ${thumbHtml}
+                            <div class="preview-body">
+                                <span class="preview-platform ${platClass}">${platLabel} · ${typeLabel}</span>${typeBadge}
+                                <div class="preview-caption">${data.caption || url}</div>
+                                <div class="preview-id" style="color:#0a8f6f;">✓ Resolved — Post ID: ${data.post_id}</div>
+                            </div>
+                        `;
+                    } else {
+                        const extractedId = extractPostIdFromUrl(url);
+                        if (extractedId) {
+                            selectedPostId = extractedId;
+                            document.getElementById('post-id').value = extractedId;
+                        }
+                        preview.innerHTML = `
+                            <div class="preview-body">
+                                <span class="preview-platform ${platClass}">${platLabel} · ${typeLabel}</span>${typeBadge}
+                                <div class="preview-caption" style="word-break:break-all;">${url}</div>
+                                <div class="preview-id" style="color:#e67e22;">⚠ ${data.message || 'Not found in promoted creatives'}${extractedId ? ' — URL ID: ' + extractedId : ''}</div>
+                            </div>
+                        `;
+                    }
+                } catch (e) {
+                    // Fallback to local extraction
+                    const extractedId = extractPostIdFromUrl(url);
+                    if (extractedId) {
+                        selectedPostId = extractedId;
+                        document.getElementById('post-id').value = extractedId;
+                    }
+                    preview.innerHTML = `
+                        <div class="preview-body">
+                            <span class="preview-platform ${platClass}">${platLabel} · ${typeLabel}</span>${typeBadge}
+                            <div class="preview-caption" style="word-break:break-all;">${url}</div>
+                            <div class="preview-id" style="color:#52657F;">${extractedId ? 'Post ID: ' + extractedId : 'Could not resolve'}</div>
+                        </div>
+                    `;
+                }
+            }, 500);
         }
 
         // Load on page load only (no auto-refresh to avoid Meta API rate limits)

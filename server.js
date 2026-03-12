@@ -262,13 +262,54 @@ function calculateMetrics(insight) {
   };
 }
 
+async function resolvePost(postUrl) {
+  const isReel = /\/(reel|reels)\//i.test(postUrl) || /\/videos\//i.test(postUrl);
+  const isInstagram = postUrl.includes('instagram.com');
+  const platform = isInstagram ? 'instagram' : 'facebook';
+  const content_type = isReel ? 'reel' : 'post';
+
+  let urlId = null;
+  const igMatch = postUrl.match(/instagram\.com\/(?:p|reel|reels)\/([A-Za-z0-9_-]+)/);
+  if (igMatch) urlId = igMatch[1];
+  const fbPostMatch = postUrl.match(/\/posts\/(\d+)/);
+  if (fbPostMatch) urlId = fbPostMatch[1];
+  const fbVideoMatch = postUrl.match(/\/videos\/(\d+)/);
+  if (fbVideoMatch) urlId = fbVideoMatch[1];
+  const pfbidMatch = postUrl.match(/(pfbid[A-Za-z0-9]+)/);
+  if (pfbidMatch) urlId = pfbidMatch[1];
+
+  // Search creatives for matching post
+  const creatives = await metaGet(`${AD_ACCOUNT_ID}/adcreatives`, {
+    fields: 'id,name,object_story_id,thumbnail_url,title,body,instagram_permalink_url',
+    limit: '50'
+  });
+
+  let matched = null;
+  for (const c of (creatives.data || [])) {
+    if (!c.object_story_id) continue;
+    if (urlId && c.instagram_permalink_url && c.instagram_permalink_url.includes(urlId)) { matched = c; break; }
+    if (urlId && c.object_story_id.includes(urlId)) { matched = c; break; }
+  }
+
+  if (matched) {
+    const postId = matched.object_story_id.includes('_') ? matched.object_story_id.split('_')[1] : matched.object_story_id;
+    return { resolved: true, object_story_id: matched.object_story_id, post_id: postId, caption: matched.body || matched.title || matched.name || '', thumbnail: matched.thumbnail_url || null, platform, content_type };
+  }
+  return { resolved: false, url_id: urlId, platform, content_type, message: 'Post not found in promoted creatives.' };
+}
+
 async function launchCampaign(body) {
-  const { content_url, budget_php, duration_days, page_id, post_id, campaign_name, platform, ab_test, countries } = body;
-  const name = campaign_name || `PGMN Burst - ${budget_php}PHP ${duration_days}d`;
+  const { budget_php, duration_days, page_id, post_id, campaign_name, platform, ab_test, countries, content_type, object_story_id } = body;
+  const name = campaign_name || `PGMN Campaign - ${budget_php}PHP ${duration_days}d`;
+
+  // Determine objective & optimization based on content type
+  const isReel = content_type === 'reel';
+  const objective = isReel ? 'OUTCOME_AWARENESS' : 'OUTCOME_ENGAGEMENT';
+  const optimizationGoal = isReel ? 'THRUPLAY' : 'POST_ENGAGEMENT';
 
   // 1. Create campaign
   const campaign = await metaPost(`${AD_ACCOUNT_ID}/campaigns`, {
-    name, objective: 'OUTCOME_ENGAGEMENT', status: 'PAUSED',
+    name, objective, status: 'PAUSED',
     special_ad_categories: '[]'
   });
   if (campaign.error) return campaign;
@@ -283,28 +324,30 @@ async function launchCampaign(body) {
   else if (platform === 'instagram_only') targeting.publisher_platforms = ['instagram'];
   else targeting.publisher_platforms = ['facebook', 'instagram'];
 
-  const results = { campaign_id: campaign.id, adsets: [], ads: [] };
+  const results = { campaign_id: campaign.id, adsets: [], ads: [], objective, optimization_goal: optimizationGoal };
+  const storyId = object_story_id || (page_id && post_id ? `${page_id}_${post_id}` : null);
 
   const createAdSet = async (adsetName, budgetPhp, extraTargeting = {}) => {
     const t = { ...targeting, ...extraTargeting };
     const adset = await metaPost(`${AD_ACCOUNT_ID}/adsets`, {
       campaign_id: campaign.id, name: adsetName,
       lifetime_budget: String(Math.round(budgetPhp * 100)),
-      optimization_goal: 'POST_ENGAGEMENT', billing_event: 'IMPRESSIONS',
+      optimization_goal: optimizationGoal, billing_event: 'IMPRESSIONS',
       start_time: fmt(now), end_time: fmt(end),
       targeting: JSON.stringify(t), status: 'PAUSED'
     });
+    if (adset.error) { results.adsets.push({ error: adset.error }); return adset; }
     results.adsets.push(adset);
-    // Create ad
-    if (post_id) {
+    if (storyId) {
       const creative = await metaPost(`${AD_ACCOUNT_ID}/adcreatives`, {
-        name: `${adsetName} - Creative`, object_story_id: `${page_id}_${post_id}`
+        name: `${adsetName} - Creative`, object_story_id: storyId
       });
+      if (creative.error) { results.ads.push({ error: creative.error }); return adset; }
       const ad = await metaPost(`${AD_ACCOUNT_ID}/ads`, {
         name: `${adsetName} - Ad`, adset_id: adset.id,
         creative: JSON.stringify({ creative_id: creative.id }), status: 'PAUSED'
       });
-      results.ads.push(ad);
+      if (ad.error) { results.ads.push({ error: ad.error }); } else { results.ads.push(ad); }
     }
     return adset;
   };
@@ -430,6 +473,11 @@ const server = http.createServer(async (req, res) => {
     if (pathname === '/api/launch' && req.method === 'POST') {
       const body = await parseBody(req);
       return sendJSON(res, { status: 'created', data: await launchCampaign(body) });
+    }
+    if (pathname === '/api/resolve-post' && req.method === 'GET') {
+      const postUrl = parsed.query?.url;
+      if (!postUrl) return sendJSON(res, { error: 'url parameter required' }, 400);
+      return sendJSON(res, await resolvePost(postUrl));
     }
     if (pathname === '/api/posts' && req.method === 'GET') {
       if (parsed.query?.nocache === '1') delete cache['posts'];
