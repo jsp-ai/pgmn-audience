@@ -267,6 +267,38 @@
         .campaign-card .actions button:hover { border-color: #FB041C; color: #FB041C; background: #FFF5F5; }
         .campaign-card .actions button.danger:hover { border-color: #d00; color: #d00; background: #FFF0F0; }
 
+        /* ─── AI Badges on Cards ─── */
+        .ai-badge-card {
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: 11px;
+            letter-spacing: 1px;
+            padding: 2px 8px;
+            border-radius: 3px;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+        .ai-badge-card:hover { opacity: 0.8; }
+        .badge-scale { background: rgba(10, 143, 111, 0.12); color: #0a8f6f; }
+        .badge-kill { background: rgba(251, 4, 28, 0.12); color: #FB041C; }
+        .badge-maintain { background: rgba(176, 140, 0, 0.12); color: #B08C00; }
+        .badge-extend { background: rgba(124, 92, 191, 0.12); color: #7c5cbf; }
+        .ai-reason {
+            display: none;
+            margin-top: 8px;
+            padding: 10px 12px;
+            background: #F0F2F5;
+            border-radius: 6px;
+            font-size: 12px;
+            line-height: 1.5;
+            color: #3a4f5c;
+            border-left: 3px solid #D5DAE0;
+        }
+        .ai-reason.open { display: block; }
+        .ai-reason.reason-scale { border-left-color: #0a8f6f; }
+        .ai-reason.reason-kill { border-left-color: #FB041C; }
+        .ai-reason.reason-maintain { border-left-color: #B08C00; }
+        .ai-reason.reason-extend { border-left-color: #7c5cbf; }
+
         /* ─── AI Panel ─── */
         .ai-panel {
             background: #FFFFFF;
@@ -280,6 +312,22 @@
             color: #fff;
             padding: 2px 8px;
             border-radius: 3px;
+        }
+        .ai-summary-block {
+            padding: 12px;
+            background: #F7F8FA;
+            border-radius: 6px;
+            margin-bottom: 8px;
+            font-size: 13px;
+            line-height: 1.6;
+            color: #3a4f5c;
+        }
+        .ai-summary-block strong {
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: 12px;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            color: #162831;
         }
         .ai-rec {
             padding: 12px;
@@ -489,6 +537,9 @@
             } catch(e) {}
         }
 
+        // Store AI recommendations keyed by campaign_id
+        let aiRecsMap = {};
+
         function renderCampaigns(campaigns) {
             const list = document.getElementById('campaign-list');
             if (!campaigns.length) {
@@ -499,20 +550,39 @@
             list.innerHTML = campaigns.map(c => {
                 const statusClass = c.status === 'ACTIVE' ? 'status-active' :
                                    c.status === 'PAUSED' ? 'status-paused' : 'status-completed';
-                const budget = c.lifetime_budget ? (parseInt(c.lifetime_budget)/100).toLocaleString() :
-                              c.daily_budget ? (parseInt(c.daily_budget)/100).toLocaleString() + '/day' : '--';
+                const budget = c.total_budget ? formatNum(c.total_budget) : '--';
                 const i = c.insights || {};
                 const engPeso = i.eng_per_peso || 0;
                 const epClass = engPeso >= 10 ? 'highlight' : '';
+
+                // AI badge for this campaign
+                const rec = aiRecsMap[c.id];
+                let badgeHtml = '';
+                let reasonHtml = '';
+                if (rec) {
+                    const badgeCls = rec.action === 'SCALE' ? 'badge-scale' :
+                                     rec.action === 'KILL' ? 'badge-kill' :
+                                     rec.action === 'EXTEND' ? 'badge-extend' : 'badge-maintain';
+                    const reasonCls = rec.action === 'SCALE' ? 'reason-scale' :
+                                      rec.action === 'KILL' ? 'reason-kill' :
+                                      rec.action === 'EXTEND' ? 'reason-extend' : 'reason-maintain';
+                    badgeHtml = `<span class="ai-badge-card ${badgeCls}" onclick="toggleReason('${c.id}')" title="Click for AI reasoning">${rec.action}</span>`;
+                    reasonHtml = `<div class="ai-reason ${reasonCls}" id="reason-${c.id}">${rec.reason || ''}${rec.new_budget ? '<br/>Recommended budget: ' + rec.new_budget + ' PHP' : ''}</div>`;
+                }
+
                 return `
                     <div class="campaign-card">
                         <div class="top">
                             <div class="name">${c.name}</div>
-                            <span class="status ${statusClass}">${c.status}</span>
+                            <div style="display:flex;gap:6px;align-items:center;">
+                                ${badgeHtml}
+                                <span class="status ${statusClass}">${c.status}</span>
+                            </div>
                         </div>
                         <div class="meta-info">
                             Started: ${c.start_time ? new Date(c.start_time).toLocaleDateString() : '--'}
                         </div>
+                        ${reasonHtml}
                         <div class="metrics">
                             <div class="metric"><div class="val">${budget}</div><div class="lbl">Budget</div></div>
                             <div class="metric"><div class="val">${i.spend ? formatNum(i.spend) : '--'}</div><div class="lbl">Spent</div></div>
@@ -531,6 +601,11 @@
                     </div>
                 `;
             }).join('');
+        }
+
+        function toggleReason(campaignId) {
+            const el = document.getElementById('reason-' + campaignId);
+            if (el) el.classList.toggle('open');
         }
 
         async function launchCampaign() {
@@ -616,39 +691,52 @@
                 const ai = data.ai_analysis || {};
                 const recs = ai.recommendations || [];
 
+                // Build map of campaign_id → recommendation for card badges
+                aiRecsMap = {};
+                recs.forEach(r => {
+                    if (r.campaign_id) aiRecsMap[r.campaign_id] = r;
+                });
+
+                // Re-render campaigns with AI badges
+                loadCampaigns();
+
+                // Build summary panel (strategy only, per-campaign detail is on cards now)
                 let html = '';
                 if (ai.summary) {
-                    html += `<div class="ai-rec" style="border-left: 3px solid #FB041C;">${ai.summary}</div>`;
+                    html += `<div class="ai-summary-block" style="border-left: 3px solid #FB041C;"><strong>Overview</strong><br/>${ai.summary}</div>`;
                 }
-                recs.forEach(r => {
-                    const cls = r.action === 'SCALE' ? 'action-scale' :
-                               r.action === 'KILL' ? 'action-kill' :
-                               r.action === 'EXTEND' ? 'action-extend' : 'action-maintain';
-                    html += `<div class="ai-rec">
-                        <span class="action ${cls}">${r.action}</span>
-                        <strong>${r.campaign_name || ''}</strong><br/>
-                        ${r.reason || ''}
-                        ${r.new_budget ? `<br/>New budget: ${r.new_budget} PHP` : ''}
-                    </div>`;
-                });
+
+                // Action counts
+                const counts = { SCALE: 0, MAINTAIN: 0, KILL: 0, EXTEND: 0 };
+                recs.forEach(r => { if (counts[r.action] !== undefined) counts[r.action]++; });
+                const countParts = [];
+                if (counts.SCALE) countParts.push(`<span class="action-scale">${counts.SCALE} SCALE</span>`);
+                if (counts.MAINTAIN) countParts.push(`<span class="action-maintain">${counts.MAINTAIN} MAINTAIN</span>`);
+                if (counts.KILL) countParts.push(`<span class="action-kill">${counts.KILL} KILL</span>`);
+                if (counts.EXTEND) countParts.push(`<span class="action-extend">${counts.EXTEND} EXTEND</span>`);
+                if (countParts.length) {
+                    html += `<div class="ai-summary-block"><strong>Actions</strong><br/>${countParts.join(' &nbsp;&middot;&nbsp; ')}</div>`;
+                }
+
                 if (ai.budget_strategy) {
-                    html += `<div class="ai-rec" style="border-left: 3px solid #7c5cbf;"><strong>Budget Strategy:</strong> ${ai.budget_strategy}</div>`;
+                    html += `<div class="ai-summary-block" style="border-left: 3px solid #7c5cbf;"><strong>Budget Strategy</strong><br/>${ai.budget_strategy}</div>`;
+                }
+                if (ai.content_advice) {
+                    html += `<div class="ai-summary-block" style="border-left: 3px solid #0a8f6f;"><strong>Content Advice</strong><br/>${ai.content_advice}</div>`;
                 }
                 if (ai.ab_test_suggestion) {
-                    html += `<div class="ai-rec" style="border-left: 3px solid #B08C00;"><strong>A/B Test:</strong> ${ai.ab_test_suggestion}</div>`;
+                    html += `<div class="ai-summary-block" style="border-left: 3px solid #B08C00;"><strong>A/B Test Idea</strong><br/>${ai.ab_test_suggestion}</div>`;
                 }
                 panel.innerHTML = html || '<div class="empty">No recommendations generated</div>';
+                showToast('AI analysis complete — badges added to campaign cards');
             } catch(e) {
                 panel.innerHTML = `<div class="empty" style="color:#FB041C;">Error: ${e.message}. Is the backend running?</div>`;
             }
         }
 
-        // Load on start
+        // Load on page load only (no auto-refresh to avoid Meta API rate limits)
         loadCampaigns();
         loadStats();
-        // Auto-refresh every 60 seconds
-        setInterval(loadCampaigns, 60000);
-        setInterval(loadStats, 60000);
     </script>
 </body>
 </html>

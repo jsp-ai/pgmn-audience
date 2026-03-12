@@ -1,10 +1,19 @@
 const { metaGet, AD_ACCOUNT_ID } = require('../../lib/meta');
 
+// Simple in-memory cache (persists across warm Vercel invocations)
+let campaignCache = { data: null, ts: 0 };
+const CACHE_TTL = 120000; // 2 minutes
+
 module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   if (req.method === 'OPTIONS') return res.status(200).end();
+
+  // Return cached if fresh
+  if (campaignCache.data && Date.now() - campaignCache.ts < CACHE_TTL) {
+    return res.status(200).json(campaignCache.data);
+  }
 
   try {
     // 1. Get campaigns
@@ -18,19 +27,21 @@ module.exports = async function handler(req, res) {
       return res.status(200).json({ data: [], paging: campaigns.paging });
     }
 
-    // 2. Get adset budgets (summed per campaign)
-    const adsets = await metaGet(`${AD_ACCOUNT_ID}/adsets`, {
-      fields: 'campaign_id,lifetime_budget,daily_budget',
-      filtering: JSON.stringify([{ field: 'campaign.id', operator: 'IN', value: campIds }]),
-      limit: '200'
-    });
+    // 2. Get adset budgets (summed per campaign, graceful on rate limit)
     const budgetMap = {};
-    for (const as of (adsets.data || [])) {
-      const cid = as.campaign_id;
-      if (!budgetMap[cid]) budgetMap[cid] = 0;
-      if (as.lifetime_budget) budgetMap[cid] += parseInt(as.lifetime_budget) / 100;
-      else if (as.daily_budget) budgetMap[cid] += parseInt(as.daily_budget) / 100;
-    }
+    try {
+      const adsets = await metaGet(`${AD_ACCOUNT_ID}/adsets`, {
+        fields: 'campaign_id,lifetime_budget,daily_budget',
+        filtering: JSON.stringify([{ field: 'campaign.id', operator: 'IN', value: campIds }]),
+        limit: '200'
+      });
+      for (const as of (adsets.data || [])) {
+        const cid = as.campaign_id;
+        if (!budgetMap[cid]) budgetMap[cid] = 0;
+        if (as.lifetime_budget) budgetMap[cid] += parseInt(as.lifetime_budget) / 100;
+        else if (as.daily_budget) budgetMap[cid] += parseInt(as.daily_budget) / 100;
+      }
+    } catch (e) { /* adset budget lookup failed, continue without */ }
 
     // 3. Get insights filtered to only these campaign IDs
     const insightFields = [
@@ -87,7 +98,9 @@ module.exports = async function handler(req, res) {
       return true;
     });
 
-    res.status(200).json({ data: enriched, paging: campaigns.paging });
+    const result = { data: enriched, paging: campaigns.paging };
+    campaignCache = { data: result, ts: Date.now() };
+    res.status(200).json(result);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

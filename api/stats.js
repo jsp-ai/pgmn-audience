@@ -1,10 +1,17 @@
 const { metaGet, calculateMetrics, AD_ACCOUNT_ID } = require('../lib/meta');
 
+let statsCache = { data: null, ts: 0 };
+const CACHE_TTL = 120000;
+
 module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   if (req.method === 'OPTIONS') return res.status(200).end();
+
+  if (statsCache.data && Date.now() - statsCache.ts < CACHE_TTL) {
+    return res.status(200).json(statsCache.data);
+  }
 
   try {
     // Get active campaigns with stop_time and budget info
@@ -73,11 +80,13 @@ module.exports = async function handler(req, res) {
       ? parseFloat(monthInsights.data[0].spend || 0)
       : 0;
 
-    res.status(200).json({
+    const result = {
       active_count: activeCount,
       total_daily_spend: Math.round(todaySpend * 100) / 100,
       total_monthly_spend: Math.round(monthSpend * 100) / 100
-    });
+    };
+    statsCache = { data: result, ts: Date.now() };
+    res.status(200).json(result);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

@@ -64,9 +64,25 @@ function metaPost(endpoint, body = {}) {
   });
 }
 
+// ─── Cache (avoid Meta API rate limits) ───
+const cache = {};
+const CACHE_TTL = 120000; // 2 minutes
+
+function getCached(key) {
+  const entry = cache[key];
+  if (entry && Date.now() - entry.ts < CACHE_TTL) return entry.data;
+  return null;
+}
+function setCache(key, data) {
+  cache[key] = { data, ts: Date.now() };
+}
+
 // ─── API Route Handlers ───
 
 async function getCampaigns(limit = 30) {
+  const cached = getCached('campaigns');
+  if (cached) return cached;
+
   const campaigns = await metaGet(`${AD_ACCOUNT_ID}/campaigns`, {
     fields: 'name,status,objective,start_time,stop_time,daily_budget,lifetime_budget,budget_remaining',
     limit: String(limit)
@@ -75,18 +91,20 @@ async function getCampaigns(limit = 30) {
   const campIds = (campaigns.data || []).map(c => c.id);
   if (!campIds.length) return { data: [], paging: campaigns.paging };
 
-  // Adset budgets
-  const adsets = await metaGet(`${AD_ACCOUNT_ID}/adsets`, {
-    fields: 'campaign_id,lifetime_budget,daily_budget',
-    filtering: JSON.stringify([{ field: 'campaign.id', operator: 'IN', value: campIds }]),
-    limit: '200'
-  });
+  // Adset budgets (wrapped in try/catch to handle rate limits gracefully)
   const budgetMap = {};
-  for (const as of (adsets.data || [])) {
-    if (!budgetMap[as.campaign_id]) budgetMap[as.campaign_id] = 0;
-    if (as.lifetime_budget) budgetMap[as.campaign_id] += parseInt(as.lifetime_budget) / 100;
-    else if (as.daily_budget) budgetMap[as.campaign_id] += parseInt(as.daily_budget) / 100;
-  }
+  try {
+    const adsets = await metaGet(`${AD_ACCOUNT_ID}/adsets`, {
+      fields: 'campaign_id,lifetime_budget,daily_budget',
+      filtering: JSON.stringify([{ field: 'campaign.id', operator: 'IN', value: campIds }]),
+      limit: '200'
+    });
+    for (const as of (adsets.data || [])) {
+      if (!budgetMap[as.campaign_id]) budgetMap[as.campaign_id] = 0;
+      if (as.lifetime_budget) budgetMap[as.campaign_id] += parseInt(as.lifetime_budget) / 100;
+      else if (as.daily_budget) budgetMap[as.campaign_id] += parseInt(as.daily_budget) / 100;
+    }
+  } catch (e) { /* adset budget lookup failed, continue without */ }
 
   // Insights
   const insightFields = [
@@ -128,7 +146,9 @@ async function getCampaigns(limit = 30) {
     if (c.total_budget && spent >= c.total_budget) return false;
     return true;
   });
-  return { data: enriched, paging: campaigns.paging };
+  const result = { data: enriched, paging: campaigns.paging };
+  setCache('campaigns', result);
+  return result;
 }
 
 async function getActiveCampaigns() {
@@ -151,6 +171,9 @@ async function getCampaignInsights(campaignId) {
 }
 
 async function getStats() {
+  const cached = getCached('stats');
+  if (cached) return cached;
+
   const active = await metaGet(`${AD_ACCOUNT_ID}/campaigns`, {
     fields: 'id,stop_time,daily_budget,lifetime_budget',
     effective_status: JSON.stringify(['ACTIVE']),
@@ -208,11 +231,13 @@ async function getStats() {
   const monthSpend = monthInsights.data && monthInsights.data[0]
     ? parseFloat(monthInsights.data[0].spend || 0) : 0;
 
-  return {
+  const statsResult = {
     active_count: activeCount,
     total_daily_spend: Math.round(todaySpend * 100) / 100,
     total_monthly_spend: Math.round(monthSpend * 100) / 100
   };
+  setCache('stats', statsResult);
+  return statsResult;
 }
 
 function calculateMetrics(insight) {
