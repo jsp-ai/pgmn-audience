@@ -77,6 +77,13 @@ module.exports = async function handler(req, res) {
           }
         }
 
+        if (!igAccountId) {
+          return res.status(200).json({
+            resolved: false, url_id: urlId, platform, content_type,
+            message: 'Could not get Instagram Business Account from page. Token may need pages_read_engagement permission.',
+          });
+        }
+
         if (igAccountId) {
           // Fetch recent IG media and match by shortcode/permalink
           const igMedia = await metaGet(`${igAccountId}/media`, {
@@ -107,7 +114,12 @@ module.exports = async function handler(req, res) {
           }
         }
       } catch (igErr) {
-        // IG lookup failed — fall through to unresolved
+        // IG lookup failed — include debug info
+        return res.status(200).json({
+          resolved: false, url_id: urlId, platform, content_type,
+          debug: igErr.message,
+          message: 'Instagram lookup failed. Token may lack instagram_basic permission.',
+        });
       }
     }
 
