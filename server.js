@@ -340,7 +340,7 @@ async function resolvePost(postUrl) {
     } catch (e) { /* IG lookup failed */ }
   }
 
-  return { resolved: false, url_id: urlId, platform, content_type, message: 'Post not found in ad creatives. It needs to be promoted at least once via Meta Business Suite before it can be used here, or add instagram_basic permission to the app token.' };
+  return { resolved: false, url_id: urlId, platform, content_type, message: 'Post not found. Make sure the URL is correct and the post belongs to your connected Instagram/Facebook account.' };
 }
 
 async function launchCampaign(body) {

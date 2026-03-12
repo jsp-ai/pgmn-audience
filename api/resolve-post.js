@@ -135,18 +135,9 @@ module.exports = async function handler(req, res) {
     }
 
     // ─── Not found ───
-    // Include debug info: first 3 creatives' permalink URLs and count
-    const debugCreatives = creatives.slice(0, 3).map(c => ({
-      id: c.id,
-      permalink: c.instagram_permalink_url || null,
-      sid: c.source_instagram_media_id || null,
-      oid: c.object_story_id ? 'yes' : 'no',
-    }));
     return res.status(200).json({
       resolved: false, url_id: urlId, platform, content_type,
-      creatives_checked: creatives.length,
-      debug_top3: debugCreatives,
-      message: 'Post not found in ad creatives. It needs to be promoted at least once via Meta Business Suite before it can be used here, or add instagram_basic permission to the app token.',
+      message: 'Post not found. Make sure the URL is correct and the post belongs to your connected Instagram/Facebook account.',
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
