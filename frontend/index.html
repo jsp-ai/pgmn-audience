@@ -283,27 +283,6 @@
         .campaign-card .actions button:hover { border-color: #FB041C; color: #FB041C; background: #FFF5F5; }
         .campaign-card .actions button.danger:hover { border-color: #d00; color: #d00; background: #FFF0F0; }
 
-        /* ─── Refresh Button ─── */
-        .refresh-btn {
-            background: none;
-            border: 1px solid #D5DAE0;
-            border-radius: 4px;
-            font-size: 12px;
-            color: #8a9bab;
-            cursor: pointer;
-            width: 20px;
-            height: 20px;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            transition: all 0.2s;
-            padding: 0;
-            line-height: 1;
-        }
-        .refresh-btn:hover { color: #162831; border-color: #162831; }
-        .refresh-btn.spinning { animation: spin 0.6s linear; }
-        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-
         /* ─── Country Selector ─── */
         .country-grid {
             display: flex;
@@ -434,105 +413,6 @@
             font-size: 10px;
             color: #8a9bab;
             margin-top: 6px;
-        }
-
-        /* ─── Post Carousel ─── */
-        .post-carousel {
-            position: relative;
-            margin-top: 4px;
-        }
-        .post-carousel .carousel-arrow {
-            position: absolute;
-            top: 50%;
-            transform: translateY(-60%);
-            width: 28px;
-            height: 28px;
-            border-radius: 50%;
-            background: #162831;
-            color: #fff;
-            border: none;
-            font-size: 14px;
-            cursor: pointer;
-            z-index: 2;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            box-shadow: 0 2px 6px rgba(0,0,0,0.2);
-            transition: opacity 0.2s, background 0.2s;
-        }
-        .post-carousel .carousel-arrow:hover { background: #FB041C; }
-        .post-carousel .carousel-arrow.hidden { opacity: 0; pointer-events: none; }
-        .post-carousel .arrow-left { left: -6px; }
-        .post-carousel .arrow-right { right: -6px; }
-        .post-picker {
-            display: flex;
-            gap: 10px;
-            overflow-x: auto;
-            overflow-y: hidden;
-            padding: 4px 4px 8px;
-            scroll-snap-type: x mandatory;
-            scroll-behavior: smooth;
-            -webkit-overflow-scrolling: touch;
-            scrollbar-width: none;
-            max-width: 100%;
-        }
-        .post-picker::-webkit-scrollbar { display: none; }
-        .post-card {
-            min-width: 130px;
-            max-width: 130px;
-            border: 2px solid #E0E4E8;
-            border-radius: 8px;
-            overflow: hidden;
-            cursor: pointer;
-            transition: border-color 0.2s, box-shadow 0.2s;
-            scroll-snap-align: start;
-            flex-shrink: 0;
-            background: #F7F8FA;
-        }
-        .post-card:hover { border-color: #52657F; }
-        .post-card.selected { border-color: #FB041C; box-shadow: 0 0 0 2px rgba(251, 4, 28, 0.2); }
-        .post-card .thumb {
-            width: 100%;
-            height: 90px;
-            object-fit: cover;
-            display: block;
-            background: #E0E4E8;
-        }
-        .post-card .thumb-placeholder {
-            width: 100%;
-            height: 90px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            background: #E0E4E8;
-            color: #8a9bab;
-            font-size: 11px;
-        }
-        .post-card .post-info {
-            padding: 5px 7px;
-        }
-        .post-card .post-caption {
-            font-size: 10px;
-            color: #3a4f5c;
-            line-height: 1.3;
-            display: -webkit-box;
-            -webkit-line-clamp: 2;
-            -webkit-box-orient: vertical;
-            overflow: hidden;
-        }
-        .post-picker-loading {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            padding: 12px 0;
-            color: #8a9bab;
-            font-size: 12px;
-        }
-        .post-picker-loading .spinner {
-            width: 16px;
-            height: 16px;
-            border-width: 2px;
-            margin-right: 0;
         }
 
         /* ─── AI Badges on Cards ─── */
@@ -953,22 +833,12 @@
             const abTest = document.getElementById('ab-toggle').classList.contains('active');
             const countries = getSelectedCountries();
 
-            // Resolve post_id: from card selection, URL extraction, or postsLookup match
+            // Resolve post_id from resolve API or URL extraction
             let postId = document.getElementById('post-id').value || null;
             let postCaption = '';
 
             if (!postId && contentUrl) {
-                // Try to match URL against loaded posts first
-                for (const [pid, post] of Object.entries(postsLookup)) {
-                    if (contentUrl.includes(pid) || (post.id && contentUrl.includes(post.id))) {
-                        postId = pid;
-                        break;
-                    }
-                }
-                // If still no match, extract from URL pattern
-                if (!postId) {
-                    postId = extractPostIdFromUrl(contentUrl);
-                }
+                postId = extractPostIdFromUrl(contentUrl);
             }
 
             // Use resolved data if available
@@ -991,8 +861,6 @@
                     postCaption = resolvedPost.caption || '';
                 }
                 contentType = resolvedPost.content_type || 'post';
-            } else if (postId && postsLookup[postId]) {
-                postCaption = postsLookup[postId].message || '';
             }
 
             // Auto-detect content type from URL as fallback
@@ -1195,109 +1063,7 @@
         }
 
         // ─── Post Resolution ───
-        let selectedPostId = null;
-        let postsLookup = {}; // post_id → full post data for preview
         let resolvedPost = null; // resolved data from /api/resolve-post
-
-        function renderPostCards(posts) {
-            return posts.map(p => {
-                const caption = p.message ? p.message.substring(0, 60) : 'No caption';
-                const thumbHtml = p.thumbnail
-                    ? `<img class="thumb" src="${p.thumbnail}" alt="" loading="lazy" />`
-                    : `<div class="thumb-placeholder">No image</div>`;
-                return `<div class="post-card" data-post-id="${p.post_id}" onclick="selectPost(this, '${p.post_id}')">
-                    ${thumbHtml}
-                    <div class="post-info">
-                        <div class="post-caption">${caption}</div>
-                    </div>
-                </div>`;
-            }).join('');
-        }
-
-        async function loadPosts(nocache) {
-            const fbPicker = document.getElementById('fb-picker');
-            const igPicker = document.getElementById('ig-picker');
-            if (nocache) {
-                document.querySelectorAll('.refresh-btn').forEach(b => { b.classList.add('spinning'); setTimeout(() => b.classList.remove('spinning'), 600); });
-            }
-            try {
-                const url = nocache ? `${API}/api/posts?nocache=1` : `${API}/api/posts`;
-                const res = await fetch(url);
-                const data = await res.json();
-                const fb = data.facebook || [];
-                const ig = data.instagram || [];
-
-                // Build lookup for preview
-                postsLookup = {};
-                fb.forEach(p => postsLookup[p.post_id] = p);
-                ig.forEach(p => postsLookup[p.post_id] = p);
-
-                fbPicker.innerHTML = fb.length
-                    ? renderPostCards(fb)
-                    : '<div style="padding:10px;color:#8a9bab;font-size:11px;">No Facebook posts found</div>';
-                igPicker.innerHTML = ig.length
-                    ? renderPostCards(ig)
-                    : '<div style="padding:10px;color:#8a9bab;font-size:11px;">No Instagram posts found</div>';
-
-                setTimeout(() => { updateRowArrows('fb-picker'); updateRowArrows('ig-picker'); }, 100);
-            } catch (e) {
-                fbPicker.innerHTML = '<div style="padding:10px;color:#8a9bab;font-size:11px;">Could not load posts</div>';
-                igPicker.innerHTML = '<div style="padding:10px;color:#8a9bab;font-size:11px;">Could not load posts</div>';
-            }
-        }
-
-        function scrollRow(pickerId, dir) {
-            const picker = document.getElementById(pickerId);
-            picker.scrollBy({ left: dir * 290, behavior: 'smooth' });
-        }
-
-        function updateRowArrows(pickerId) {
-            const picker = document.getElementById(pickerId);
-            if (!picker) return;
-            const carousel = picker.closest('.post-carousel');
-            const left = carousel.querySelector('.arrow-left');
-            const right = carousel.querySelector('.arrow-right');
-            if (!left || !right) return;
-            left.classList.toggle('hidden', picker.scrollLeft <= 4);
-            right.classList.toggle('hidden', picker.scrollLeft + picker.clientWidth >= picker.scrollWidth - 4);
-        }
-
-        document.getElementById('fb-picker').addEventListener('scroll', () => updateRowArrows('fb-picker'));
-        document.getElementById('ig-picker').addEventListener('scroll', () => updateRowArrows('ig-picker'));
-
-        function selectPost(el, postId) {
-            document.querySelectorAll('.post-card.selected').forEach(c => c.classList.remove('selected'));
-            el.classList.add('selected');
-            selectedPostId = postId;
-            document.getElementById('post-id').value = postId;
-
-            // Show preview
-            const post = postsLookup[postId];
-            const preview = document.getElementById('post-preview');
-            const display = document.getElementById('post-id-display');
-            if (post) {
-                const platClass = post.platform === 'instagram' ? 'plat-instagram' : 'plat-facebook';
-                const platLabel = post.platform === 'instagram' ? 'INSTAGRAM' : 'FACEBOOK';
-                const thumbHtml = post.thumbnail
-                    ? `<img class="preview-thumb" src="${post.thumbnail}" alt="" />`
-                    : '';
-                preview.innerHTML = `
-                    ${thumbHtml}
-                    <div class="preview-body">
-                        <span class="preview-platform ${platClass}">${platLabel}</span>
-                        <div class="preview-caption">${post.message || 'No caption'}</div>
-                        <div class="preview-id">Post ID: ${postId}</div>
-                    </div>
-                `;
-                preview.classList.add('open');
-                display.style.display = 'none';
-            } else {
-                preview.classList.remove('open');
-                display.textContent = `Post ID: ${postId}`;
-                display.style.color = '#0a8f6f';
-                display.style.display = 'block';
-            }
-        }
 
         let resolveTimeout = null;
         function previewFromUrl(url) {
@@ -1306,7 +1072,7 @@
             resolvedPost = null;
 
             if (!url.trim()) {
-                selectedPostId = null;
+                document.getElementById('post-id').value = '';
                 preview.classList.remove('open');
                 display.textContent = 'Paste a post link above to preview';
                 display.style.color = '#8a9bab';
@@ -1343,21 +1109,21 @@
                     resolvedPost = data;
 
                     if (data.resolved) {
-                        selectedPostId = data.post_id;
-                        document.getElementById('post-id').value = data.post_id;
+                        document.getElementById('post-id').value = data.post_id || data.ig_media_id || '';
                         const thumbHtml = data.thumbnail ? `<img class="preview-thumb" src="${data.thumbnail}" alt="" />` : '';
+                        const idLabel = data.post_id ? `Post ID: ${data.post_id}` : data.ig_media_id ? `IG Media: ${data.ig_media_id}` : '';
+                        const sourceLabel = data.source ? ` (${data.source})` : '';
                         preview.innerHTML = `
                             ${thumbHtml}
                             <div class="preview-body">
                                 <span class="preview-platform ${platClass}">${platLabel} · ${typeLabel}</span>${typeBadge}
                                 <div class="preview-caption">${data.caption || url}</div>
-                                <div class="preview-id" style="color:#0a8f6f;">✓ Resolved — Post ID: ${data.post_id}</div>
+                                <div class="preview-id" style="color:#0a8f6f;">✓ Resolved — ${idLabel}${sourceLabel}</div>
                             </div>
                         `;
                     } else {
                         const extractedId = extractPostIdFromUrl(url);
                         if (extractedId) {
-                            selectedPostId = extractedId;
                             document.getElementById('post-id').value = extractedId;
                         }
                         preview.innerHTML = `
@@ -1372,7 +1138,6 @@
                     // Fallback to local extraction
                     const extractedId = extractPostIdFromUrl(url);
                     if (extractedId) {
-                        selectedPostId = extractedId;
                         document.getElementById('post-id').value = extractedId;
                     }
                     preview.innerHTML = `

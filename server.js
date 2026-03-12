@@ -262,6 +262,14 @@ function calculateMetrics(insight) {
   };
 }
 
+async function getIgAccountId() {
+  try {
+    const pageData = await metaGet(PAGE_ID, { fields: 'instagram_business_account' });
+    if (pageData.instagram_business_account) return pageData.instagram_business_account.id;
+  } catch (e) { /* ignore */ }
+  return null;
+}
+
 async function resolvePost(postUrl) {
   const isReel = /\/(reel|reels)\//i.test(postUrl) || /\/videos\//i.test(postUrl);
   const isInstagram = postUrl.includes('instagram.com');
@@ -278,24 +286,61 @@ async function resolvePost(postUrl) {
   const pfbidMatch = postUrl.match(/(pfbid[A-Za-z0-9]+)/);
   if (pfbidMatch) urlId = pfbidMatch[1];
 
-  // Search creatives for matching post
+  // ─── Step 1: Check ad creatives (includes source_instagram_media_id) ───
   const creatives = await metaGet(`${AD_ACCOUNT_ID}/adcreatives`, {
-    fields: 'id,name,object_story_id,thumbnail_url,title,body,instagram_permalink_url',
+    fields: 'id,name,object_story_id,thumbnail_url,title,body,instagram_permalink_url,source_instagram_media_id',
     limit: '50'
   });
 
   let matched = null;
   for (const c of (creatives.data || [])) {
-    if (!c.object_story_id) continue;
     if (urlId && c.instagram_permalink_url && c.instagram_permalink_url.includes(urlId)) { matched = c; break; }
-    if (urlId && c.object_story_id.includes(urlId)) { matched = c; break; }
+    if (urlId && c.object_story_id && c.object_story_id.includes(urlId)) { matched = c; break; }
   }
 
   if (matched) {
-    const postId = matched.object_story_id.includes('_') ? matched.object_story_id.split('_')[1] : matched.object_story_id;
-    return { resolved: true, object_story_id: matched.object_story_id, post_id: postId, caption: matched.body || matched.title || matched.name || '', thumbnail: matched.thumbnail_url || null, platform, content_type };
+    if (matched.object_story_id) {
+      const postId = matched.object_story_id.includes('_') ? matched.object_story_id.split('_')[1] : matched.object_story_id;
+      return { resolved: true, object_story_id: matched.object_story_id, post_id: postId, caption: matched.body || matched.title || matched.name || '', thumbnail: matched.thumbnail_url || null, platform, content_type, source: 'ad_creatives' };
+    } else if (matched.source_instagram_media_id) {
+      const igAccountId = await getIgAccountId();
+      return {
+        resolved: true, ig_media_id: matched.source_instagram_media_id, ig_account_id: igAccountId,
+        caption: matched.body || matched.title || matched.name || '', thumbnail: matched.thumbnail_url || null,
+        platform, content_type, use_ig_media: true, source: 'ad_creatives_ig',
+      };
+    }
   }
-  return { resolved: false, url_id: urlId, platform, content_type, message: 'Post not found in promoted creatives.' };
+
+  // ─── Step 2: IG Graph API media lookup (requires instagram_basic) ───
+  if (isInstagram && urlId) {
+    try {
+      const igAccountId = await getIgAccountId();
+      if (igAccountId) {
+        const igMedia = await metaGet(`${igAccountId}/media`, {
+          fields: 'id,ig_id,shortcode,permalink,caption,media_type,thumbnail_url,media_url',
+          limit: '50'
+        });
+        if (!igMedia.error && igMedia.data) {
+          let igMatched = null;
+          for (const m of igMedia.data) {
+            if (m.shortcode === urlId || (m.permalink && m.permalink.includes(urlId))) { igMatched = m; break; }
+          }
+          if (igMatched) {
+            return {
+              resolved: true, ig_media_id: igMatched.id, ig_id: igMatched.ig_id || igMatched.id,
+              ig_account_id: igAccountId, caption: igMatched.caption || '',
+              thumbnail: igMatched.thumbnail_url || igMatched.media_url || null,
+              media_type: igMatched.media_type, platform, content_type,
+              use_ig_media: true, source: 'ig_media',
+            };
+          }
+        }
+      }
+    } catch (e) { /* IG lookup failed */ }
+  }
+
+  return { resolved: false, url_id: urlId, platform, content_type, message: 'Post not found in ad creatives. It needs to be promoted at least once via Meta Business Suite before it can be used here, or add instagram_basic permission to the app token.' };
 }
 
 async function launchCampaign(body) {
