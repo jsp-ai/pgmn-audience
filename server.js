@@ -319,6 +319,47 @@ async function launchCampaign(body) {
   return results;
 }
 
+const PAGE_ID = env.META_PAGE_ID || '394530007066390';
+
+async function getPagePosts() {
+  const cached = getCached('posts');
+  if (cached) return cached;
+
+  // Pull promoted posts from ad creatives (ad account token has permission)
+  const creatives = await metaGet(`${AD_ACCOUNT_ID}/adcreatives`, {
+    fields: 'id,name,object_story_id,thumbnail_url,title,body,instagram_permalink_url',
+    limit: '30'
+  });
+
+  if (creatives.error) {
+    return { data: [], error: creatives.error };
+  }
+
+  // Deduplicate by post_id, split by platform
+  const seen = new Set();
+  const facebook = [];
+  const instagram = [];
+  for (const c of (creatives.data || [])) {
+    if (!c.object_story_id) continue;
+    const postId = c.object_story_id.includes('_') ? c.object_story_id.split('_')[1] : c.object_story_id;
+    if (seen.has(postId)) continue;
+    seen.add(postId);
+    const post = {
+      id: c.object_story_id,
+      post_id: postId,
+      message: c.body || c.title || c.name || '',
+      thumbnail: c.thumbnail_url || null,
+      platform: c.instagram_permalink_url ? 'instagram' : 'facebook'
+    };
+    if (post.platform === 'instagram') instagram.push(post);
+    else facebook.push(post);
+  }
+
+  const result = { facebook, instagram };
+  setCache('posts', result);
+  return result;
+}
+
 async function updateCampaignStatus(campaignId, action) {
   const statusMap = { pause: 'PAUSED', activate: 'ACTIVE', archive: 'ARCHIVED' };
   return metaPost(campaignId, { status: statusMap[action] || action });
@@ -389,6 +430,10 @@ const server = http.createServer(async (req, res) => {
     if (pathname === '/api/launch' && req.method === 'POST') {
       const body = await parseBody(req);
       return sendJSON(res, { status: 'created', data: await launchCampaign(body) });
+    }
+    if (pathname === '/api/posts' && req.method === 'GET') {
+      if (parsed.query?.nocache === '1') delete cache['posts'];
+      return sendJSON(res, await getPagePosts());
     }
     if (pathname === '/api/campaigns/status' && req.method === 'POST') {
       const body = await parseBody(req);

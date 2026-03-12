@@ -19,7 +19,11 @@
         /* ─── Header ─── */
         .header {
             background: #162831;
-            padding: 18px 32px;
+            padding: 18px 24px;
+        }
+        .header-inner {
+            max-width: 900px;
+            margin: 0 auto;
             display: flex;
             justify-content: space-between;
             align-items: center;
@@ -57,14 +61,25 @@
             color: #FFFFFF;
             letter-spacing: 1px;
         }
+        .header .page-id-badge {
+            font-family: 'DM Sans', sans-serif;
+            font-size: 11px;
+            color: #52657F;
+            background: rgba(255,255,255,0.08);
+            padding: 3px 10px;
+            border-radius: 4px;
+            margin-top: 4px;
+            display: inline-block;
+        }
+        .header .page-id-badge span { color: #8a9bab; }
 
         /* ─── Layout ─── */
         .container {
-            max-width: 1200px;
+            max-width: 900px;
             margin: 0 auto;
             padding: 24px;
-            display: grid;
-            grid-template-columns: 400px 1fr;
+            display: flex;
+            flex-direction: column;
             gap: 24px;
         }
 
@@ -74,6 +89,7 @@
             border: 1px solid #E0E4E8;
             border-radius: 10px;
             padding: 24px;
+            overflow: hidden;
         }
         .panel h2 {
             font-family: 'Bebas Neue', sans-serif;
@@ -267,6 +283,27 @@
         .campaign-card .actions button:hover { border-color: #FB041C; color: #FB041C; background: #FFF5F5; }
         .campaign-card .actions button.danger:hover { border-color: #d00; color: #d00; background: #FFF0F0; }
 
+        /* ─── Refresh Button ─── */
+        .refresh-btn {
+            background: none;
+            border: 1px solid #D5DAE0;
+            border-radius: 4px;
+            font-size: 12px;
+            color: #8a9bab;
+            cursor: pointer;
+            width: 20px;
+            height: 20px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+            padding: 0;
+            line-height: 1;
+        }
+        .refresh-btn:hover { color: #162831; border-color: #162831; }
+        .refresh-btn.spinning { animation: spin 0.6s linear; }
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
         /* ─── Country Selector ─── */
         .country-grid {
             display: flex;
@@ -292,6 +329,210 @@
             background: #162831;
             color: #FFFFFF;
             border-color: #162831;
+        }
+
+        /* ─── Quick Templates ─── */
+        .template-grid {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-bottom: 16px;
+        }
+        .template-btn {
+            padding: 7px 10px;
+            border: 1px solid #D5DAE0;
+            border-radius: 6px;
+            background: #F7F8FA;
+            font-family: 'DM Sans', sans-serif;
+            font-size: 11px;
+            font-weight: 600;
+            color: #52657F;
+            cursor: pointer;
+            transition: all 0.15s;
+            user-select: none;
+            line-height: 1.3;
+        }
+        .template-btn:hover { border-color: #52657F; background: #fff; }
+        .template-btn.active {
+            background: #162831;
+            color: #FFFFFF;
+            border-color: #162831;
+        }
+        .template-detail {
+            display: none;
+            padding: 10px 12px;
+            background: #F0F2F5;
+            border-radius: 6px;
+            font-size: 11px;
+            color: #3a4f5c;
+            margin-bottom: 12px;
+            line-height: 1.6;
+            border-left: 3px solid #FB041C;
+        }
+        .template-detail.open { display: block; }
+        .template-detail .td-row { display: flex; gap: 16px; flex-wrap: wrap; }
+        .template-detail .td-item { }
+        .template-detail .td-label {
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: 10px;
+            letter-spacing: 1px;
+            color: #8a9bab;
+            text-transform: uppercase;
+        }
+        .template-detail .td-val {
+            font-weight: 700;
+            color: #162831;
+            font-size: 13px;
+        }
+
+        /* ─── Post Preview ─── */
+        .post-preview {
+            display: none;
+            margin-top: 10px;
+            padding: 12px;
+            background: #F7F8FA;
+            border: 1px solid #E0E4E8;
+            border-radius: 8px;
+            gap: 12px;
+        }
+        .post-preview.open {
+            display: flex;
+        }
+        .post-preview .preview-thumb {
+            width: 120px;
+            height: 120px;
+            border-radius: 6px;
+            object-fit: cover;
+            flex-shrink: 0;
+            background: #E0E4E8;
+        }
+        .post-preview .preview-body {
+            flex: 1;
+            min-width: 0;
+        }
+        .post-preview .preview-platform {
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: 10px;
+            letter-spacing: 1px;
+            padding: 2px 7px;
+            border-radius: 3px;
+            display: inline-block;
+            margin-bottom: 6px;
+        }
+        .preview-platform.plat-facebook { background: rgba(24,119,242,0.1); color: #1877F2; }
+        .preview-platform.plat-instagram { background: rgba(225,48,108,0.1); color: #E1306C; }
+        .post-preview .preview-caption {
+            font-size: 12px;
+            color: #3a4f5c;
+            line-height: 1.5;
+            display: -webkit-box;
+            -webkit-line-clamp: 4;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+        .post-preview .preview-id {
+            font-size: 10px;
+            color: #8a9bab;
+            margin-top: 6px;
+        }
+
+        /* ─── Post Carousel ─── */
+        .post-carousel {
+            position: relative;
+            margin-top: 4px;
+        }
+        .post-carousel .carousel-arrow {
+            position: absolute;
+            top: 50%;
+            transform: translateY(-60%);
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            background: #162831;
+            color: #fff;
+            border: none;
+            font-size: 14px;
+            cursor: pointer;
+            z-index: 2;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+            transition: opacity 0.2s, background 0.2s;
+        }
+        .post-carousel .carousel-arrow:hover { background: #FB041C; }
+        .post-carousel .carousel-arrow.hidden { opacity: 0; pointer-events: none; }
+        .post-carousel .arrow-left { left: -6px; }
+        .post-carousel .arrow-right { right: -6px; }
+        .post-picker {
+            display: flex;
+            gap: 10px;
+            overflow-x: auto;
+            overflow-y: hidden;
+            padding: 4px 4px 8px;
+            scroll-snap-type: x mandatory;
+            scroll-behavior: smooth;
+            -webkit-overflow-scrolling: touch;
+            scrollbar-width: none;
+            max-width: 100%;
+        }
+        .post-picker::-webkit-scrollbar { display: none; }
+        .post-card {
+            min-width: 130px;
+            max-width: 130px;
+            border: 2px solid #E0E4E8;
+            border-radius: 8px;
+            overflow: hidden;
+            cursor: pointer;
+            transition: border-color 0.2s, box-shadow 0.2s;
+            scroll-snap-align: start;
+            flex-shrink: 0;
+            background: #F7F8FA;
+        }
+        .post-card:hover { border-color: #52657F; }
+        .post-card.selected { border-color: #FB041C; box-shadow: 0 0 0 2px rgba(251, 4, 28, 0.2); }
+        .post-card .thumb {
+            width: 100%;
+            height: 90px;
+            object-fit: cover;
+            display: block;
+            background: #E0E4E8;
+        }
+        .post-card .thumb-placeholder {
+            width: 100%;
+            height: 90px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #E0E4E8;
+            color: #8a9bab;
+            font-size: 11px;
+        }
+        .post-card .post-info {
+            padding: 5px 7px;
+        }
+        .post-card .post-caption {
+            font-size: 10px;
+            color: #3a4f5c;
+            line-height: 1.3;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+        .post-picker-loading {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 12px 0;
+            color: #8a9bab;
+            font-size: 12px;
+        }
+        .post-picker-loading .spinner {
+            width: 16px;
+            height: 16px;
+            border-width: 2px;
+            margin-right: 0;
         }
 
         /* ─── AI Badges on Cards ─── */
@@ -419,7 +660,7 @@
             font-size: 14px;
         }
         @media (max-width: 900px) {
-            .container { grid-template-columns: 1fr; padding: 16px; }
+            .container { padding: 16px; }
         }
         @media (max-width: 600px) {
             .header {
@@ -443,7 +684,11 @@
 </head>
 <body>
     <div class="header">
-        <h1><span class="pg">PG</span><span class="mn">MN</span><span class="sub">Ad Launcher</span></h1>
+      <div class="header-inner">
+        <div>
+            <h1><span class="pg">PG</span><span class="mn">MN</span><span class="sub">Ad Launcher</span></h1>
+            <div class="page-id-badge">Page: <span>394530007066390</span></div>
+        </div>
         <div class="stats">
             <div>
                 <div class="stat-label">Campaigns Live</div>
@@ -458,54 +703,80 @@
                 <div class="stat-value" id="stat-monthly">--</div>
             </div>
         </div>
+      </div>
     </div>
 
     <div class="container">
-        <!-- LEFT: Launch Panel -->
-        <div>
+        <!-- Launch Panel -->
             <div class="panel">
                 <h2><div class="dot"></div> Launch Campaign</h2>
 
-                <label>Content URL or Post Link</label>
-                <input type="text" id="content-url" placeholder="https://facebook.com/pgmn/posts/..." />
+                <div class="template-grid">
+                    <div class="template-btn" onclick="applyTemplate(this, 'reel_ph')">Reel Burst (PH)</div>
+                    <div class="template-btn" onclick="applyTemplate(this, 'reel_diaspora')">Reel Burst (Diaspora)</div>
+                    <div class="template-btn" onclick="applyTemplate(this, 'news_push')">News Push</div>
+                    <div class="template-btn" onclick="applyTemplate(this, 'scale_winner')">Scale Winner</div>
+                    <div class="template-btn" onclick="applyTemplate(this, 'ab_test')">A/B Test</div>
+                    <div class="template-btn" onclick="applyTemplate(this, 'custom')">Custom</div>
+                </div>
+                <div class="template-detail" id="template-detail"></div>
 
-                <label>Page ID</label>
-                <input type="text" id="page-id" placeholder="Your Facebook Page ID" value="394530007066390" />
-
-                <label>Post ID (optional)</label>
-                <input type="text" id="post-id" placeholder="Leave empty for link ads" />
-
-                <div class="row">
-                    <div>
-                        <label>Budget (PHP)</label>
-                        <input type="number" id="budget" placeholder="5000" value="3000" />
+                <div id="custom-fields" style="display:none;">
+                    <div class="row">
+                        <div>
+                            <label>Budget (PHP)</label>
+                            <input type="number" id="budget" placeholder="5000" value="3000" />
+                        </div>
+                        <div>
+                            <label>Duration (Days)</label>
+                            <input type="number" id="duration" placeholder="3" value="3" />
+                        </div>
                     </div>
-                    <div>
-                        <label>Duration (Days)</label>
-                        <input type="number" id="duration" placeholder="3" value="3" />
+
+                    <label>Platform</label>
+                    <select id="platform">
+                        <option value="both">Facebook + Instagram</option>
+                        <option value="facebook_only">Facebook Only</option>
+                        <option value="instagram_only">Instagram Only</option>
+                    </select>
+
+                    <label>Target Countries</label>
+                    <div class="country-grid" id="country-selector">
+                        <span class="country-btn selected" data-code="PH">🇵🇭 PH</span>
+                        <span class="country-btn" data-code="US">🇺🇸 US</span>
+                        <span class="country-btn" data-code="SA">🇸🇦 Saudi</span>
+                        <span class="country-btn" data-code="CA">🇨🇦 Canada</span>
+                        <span class="country-btn" data-code="AE">🇦🇪 UAE</span>
+                    </div>
+
+                    <div class="toggle-row">
+                        <span>A/B Test (split audience)</span>
+                        <div class="toggle" id="ab-toggle" onclick="this.classList.toggle('active')"></div>
                     </div>
                 </div>
 
-                <label>Platform</label>
-                <select id="platform">
-                    <option value="both">Facebook + Instagram</option>
-                    <option value="facebook_only">Facebook Only</option>
-                    <option value="instagram_only">Instagram Only</option>
-                </select>
+                <label>Select Post</label>
 
-                <label>Target Countries</label>
-                <div class="country-grid" id="country-selector">
-                    <span class="country-btn selected" data-code="PH">🇵🇭 PH</span>
-                    <span class="country-btn" data-code="US">🇺🇸 US</span>
-                    <span class="country-btn" data-code="SA">🇸🇦 Saudi</span>
-                    <span class="country-btn" data-code="CA">🇨🇦 Canada</span>
-                    <span class="country-btn" data-code="AE">🇦🇪 UAE</span>
+                <div style="font-size:11px;font-weight:600;color:#1877F2;margin-bottom:4px;margin-top:8px;display:flex;align-items:center;gap:6px;">f Facebook Posts <button class="refresh-btn" onclick="loadPosts(true)" title="Refresh Facebook posts">&#x21bb;</button></div>
+                <div class="post-carousel">
+                    <button class="carousel-arrow arrow-left hidden" onclick="scrollRow('fb-picker',-1)">&lsaquo;</button>
+                    <div id="fb-picker" class="post-picker"></div>
+                    <button class="carousel-arrow arrow-right hidden" onclick="scrollRow('fb-picker',1)">&rsaquo;</button>
                 </div>
 
-                <div class="toggle-row">
-                    <span>A/B Test (split audience)</span>
-                    <div class="toggle" id="ab-toggle" onclick="this.classList.toggle('active')"></div>
+                <div style="font-size:11px;font-weight:600;margin-bottom:4px;margin-top:12px;display:flex;align-items:center;gap:6px;"><span style="background:linear-gradient(45deg,#f09433,#e6683c,#dc2743,#cc2366,#bc1888);-webkit-background-clip:text;-webkit-text-fill-color:transparent;">Instagram Posts</span> <button class="refresh-btn" onclick="loadPosts(true)" title="Refresh Instagram posts">&#x21bb;</button></div>
+                <div class="post-carousel">
+                    <button class="carousel-arrow arrow-left hidden" onclick="scrollRow('ig-picker',-1)">&lsaquo;</button>
+                    <div id="ig-picker" class="post-picker"></div>
+                    <button class="carousel-arrow arrow-right hidden" onclick="scrollRow('ig-picker',1)">&rsaquo;</button>
                 </div>
+
+                <label style="margin-top:16px;">Or Paste a Post Link</label>
+                <input type="text" id="content-url" placeholder="https://facebook.com/pgmn/posts/... or https://instagram.com/p/..." oninput="previewFromUrl(this.value)" />
+
+                <input type="hidden" id="post-id" />
+                <div class="post-preview" id="post-preview"></div>
+                <div style="font-size:11px;color:#8a9bab;margin-top:6px;" id="post-id-display">No post selected — scroll to pick one</div>
 
                 <button class="btn btn-primary" id="launch-btn" onclick="launchCampaign()">
                     Launch Campaign
@@ -517,21 +788,18 @@
             </div>
 
             <!-- AI Recommendations -->
-            <div class="panel ai-panel" style="margin-top: 16px;" id="ai-panel">
+            <div class="panel ai-panel" id="ai-panel">
                 <h2><span class="ai-badge">AI</span> Recommendations</h2>
                 <div id="ai-recs" class="empty">Click "Run AI Optimizer" to analyze active campaigns</div>
             </div>
-        </div>
 
-        <!-- RIGHT: Active Campaigns -->
-        <div>
+        <!-- Active Campaigns -->
             <div class="panel">
                 <h2><div class="dot"></div> Active Campaigns</h2>
                 <div id="campaign-list" class="campaign-list">
                     <div class="loading"><div class="spinner"></div> Loading campaigns...</div>
                 </div>
             </div>
-        </div>
     </div>
 
     <div class="toast" id="toast"></div>
@@ -668,15 +936,15 @@
                 content_url: document.getElementById('content-url').value,
                 budget_php: parseFloat(document.getElementById('budget').value),
                 duration_days: parseInt(document.getElementById('duration').value),
-                page_id: document.getElementById('page-id').value,
+                page_id: '394530007066390',
                 post_id: document.getElementById('post-id').value || null,
                 platform: document.getElementById('platform').value,
                 ab_test: document.getElementById('ab-toggle').classList.contains('active'),
                 countries: getSelectedCountries(),
             };
 
-            if (!body.content_url || !body.page_id) {
-                showToast('Content URL and Page ID are required', true);
+            if (!body.content_url) {
+                showToast('Content URL is required', true);
                 btn.disabled = false;
                 btn.textContent = 'Launch Campaign';
                 return;
@@ -786,7 +1054,234 @@
             }
         }
 
+        // ─── Quick Templates ───
+        const TEMPLATES = {
+            reel_ph:        { budget: 1000, duration: 3, platform: 'instagram_only', countries: ['PH'],             ab: false, label: 'Reel Burst (PH)',       desc: 'Best performer — Instagram Reels to Philippine audience' },
+            reel_diaspora:  { budget: 2000, duration: 3, platform: 'instagram_only', countries: ['US','SA','CA','AE'], ab: false, label: 'Reel Burst (Diaspora)',  desc: 'Instagram Reels to Filipino diaspora markets' },
+            news_push:      { budget: 500,  duration: 1, platform: 'both',           countries: ['PH'],             ab: false, label: 'News Push',              desc: 'Quick 1-day push for trending/breaking news' },
+            scale_winner:   { budget: 5000, duration: 5, platform: 'both',           countries: ['PH'],             ab: true,  label: 'Scale Winner',            desc: '5-day scale with A/B test (Broad vs Core 25-44)' },
+            ab_test:        { budget: 2000, duration: 3, platform: 'both',           countries: ['PH'],             ab: true,  label: 'A/B Test',                desc: '3-day split test for new content formats' },
+        };
+
+        const COUNTRY_NAMES = { PH: 'Philippines', US: 'United States', SA: 'Saudi Arabia', CA: 'Canada', AE: 'UAE' };
+        const PLATFORM_NAMES = { both: 'Facebook + Instagram', facebook_only: 'Facebook Only', instagram_only: 'Instagram Only' };
+
+        function applyTemplate(el, key) {
+            const wasActive = el.classList.contains('active');
+            document.querySelectorAll('.template-btn').forEach(b => b.classList.remove('active'));
+            const detail = document.getElementById('template-detail');
+            const customFields = document.getElementById('custom-fields');
+
+            if (wasActive) {
+                detail.classList.remove('open');
+                customFields.style.display = 'none';
+                return;
+            }
+
+            el.classList.add('active');
+
+            // Custom mode — show editable fields, hide detail
+            if (key === 'custom') {
+                detail.classList.remove('open');
+                customFields.style.display = 'block';
+                return;
+            }
+
+            // Preset template — fill form, show detail, hide fields
+            const t = TEMPLATES[key];
+            customFields.style.display = 'none';
+
+            document.getElementById('budget').value = t.budget;
+            document.getElementById('duration').value = t.duration;
+            document.getElementById('platform').value = t.platform;
+
+            document.querySelectorAll('#country-selector .country-btn').forEach(b => {
+                b.classList.toggle('selected', t.countries.includes(b.dataset.code));
+            });
+
+            const abToggle = document.getElementById('ab-toggle');
+            if (t.ab) abToggle.classList.add('active');
+            else abToggle.classList.remove('active');
+
+            detail.innerHTML = `
+                <div style="font-weight:600;color:#162831;margin-bottom:6px;">${t.label}</div>
+                <div style="color:#52657F;margin-bottom:8px;">${t.desc}</div>
+                <div class="td-row">
+                    <div class="td-item"><div class="td-label">Budget</div><div class="td-val">${t.budget.toLocaleString()} PHP</div></div>
+                    <div class="td-item"><div class="td-label">Duration</div><div class="td-val">${t.duration} day${t.duration > 1 ? 's' : ''}</div></div>
+                    <div class="td-item"><div class="td-label">Platform</div><div class="td-val">${PLATFORM_NAMES[t.platform]}</div></div>
+                    <div class="td-item"><div class="td-label">Countries</div><div class="td-val">${t.countries.map(c => COUNTRY_NAMES[c] || c).join(', ')}</div></div>
+                    <div class="td-item"><div class="td-label">A/B Test</div><div class="td-val">${t.ab ? 'Yes (Broad vs Core 25-44)' : 'No'}</div></div>
+                </div>
+            `;
+            detail.classList.add('open');
+        }
+
+        // ─── Post Picker (split by platform) ───
+        let selectedPostId = null;
+        let postsLookup = {}; // post_id → full post data for preview
+
+        function renderPostCards(posts) {
+            return posts.map(p => {
+                const caption = p.message ? p.message.substring(0, 60) : 'No caption';
+                const thumbHtml = p.thumbnail
+                    ? `<img class="thumb" src="${p.thumbnail}" alt="" loading="lazy" />`
+                    : `<div class="thumb-placeholder">No image</div>`;
+                return `<div class="post-card" data-post-id="${p.post_id}" onclick="selectPost(this, '${p.post_id}')">
+                    ${thumbHtml}
+                    <div class="post-info">
+                        <div class="post-caption">${caption}</div>
+                    </div>
+                </div>`;
+            }).join('');
+        }
+
+        async function loadPosts(nocache) {
+            const fbPicker = document.getElementById('fb-picker');
+            const igPicker = document.getElementById('ig-picker');
+            if (nocache) {
+                document.querySelectorAll('.refresh-btn').forEach(b => { b.classList.add('spinning'); setTimeout(() => b.classList.remove('spinning'), 600); });
+            }
+            try {
+                const url = nocache ? `${API}/api/posts?nocache=1` : `${API}/api/posts`;
+                const res = await fetch(url);
+                const data = await res.json();
+                const fb = data.facebook || [];
+                const ig = data.instagram || [];
+
+                // Build lookup for preview
+                postsLookup = {};
+                fb.forEach(p => postsLookup[p.post_id] = p);
+                ig.forEach(p => postsLookup[p.post_id] = p);
+
+                fbPicker.innerHTML = fb.length
+                    ? renderPostCards(fb)
+                    : '<div style="padding:10px;color:#8a9bab;font-size:11px;">No Facebook posts found</div>';
+                igPicker.innerHTML = ig.length
+                    ? renderPostCards(ig)
+                    : '<div style="padding:10px;color:#8a9bab;font-size:11px;">No Instagram posts found</div>';
+
+                setTimeout(() => { updateRowArrows('fb-picker'); updateRowArrows('ig-picker'); }, 100);
+            } catch (e) {
+                fbPicker.innerHTML = '<div style="padding:10px;color:#8a9bab;font-size:11px;">Could not load posts</div>';
+                igPicker.innerHTML = '<div style="padding:10px;color:#8a9bab;font-size:11px;">Could not load posts</div>';
+            }
+        }
+
+        function scrollRow(pickerId, dir) {
+            const picker = document.getElementById(pickerId);
+            picker.scrollBy({ left: dir * 290, behavior: 'smooth' });
+        }
+
+        function updateRowArrows(pickerId) {
+            const picker = document.getElementById(pickerId);
+            if (!picker) return;
+            const carousel = picker.closest('.post-carousel');
+            const left = carousel.querySelector('.arrow-left');
+            const right = carousel.querySelector('.arrow-right');
+            if (!left || !right) return;
+            left.classList.toggle('hidden', picker.scrollLeft <= 4);
+            right.classList.toggle('hidden', picker.scrollLeft + picker.clientWidth >= picker.scrollWidth - 4);
+        }
+
+        document.getElementById('fb-picker').addEventListener('scroll', () => updateRowArrows('fb-picker'));
+        document.getElementById('ig-picker').addEventListener('scroll', () => updateRowArrows('ig-picker'));
+
+        function selectPost(el, postId) {
+            document.querySelectorAll('.post-card.selected').forEach(c => c.classList.remove('selected'));
+            el.classList.add('selected');
+            selectedPostId = postId;
+            document.getElementById('post-id').value = postId;
+
+            // Show preview
+            const post = postsLookup[postId];
+            const preview = document.getElementById('post-preview');
+            const display = document.getElementById('post-id-display');
+            if (post) {
+                const platClass = post.platform === 'instagram' ? 'plat-instagram' : 'plat-facebook';
+                const platLabel = post.platform === 'instagram' ? 'INSTAGRAM' : 'FACEBOOK';
+                const thumbHtml = post.thumbnail
+                    ? `<img class="preview-thumb" src="${post.thumbnail}" alt="" />`
+                    : '';
+                preview.innerHTML = `
+                    ${thumbHtml}
+                    <div class="preview-body">
+                        <span class="preview-platform ${platClass}">${platLabel}</span>
+                        <div class="preview-caption">${post.message || 'No caption'}</div>
+                        <div class="preview-id">Post ID: ${postId}</div>
+                    </div>
+                `;
+                preview.classList.add('open');
+                display.style.display = 'none';
+            } else {
+                preview.classList.remove('open');
+                display.textContent = `Post ID: ${postId}`;
+                display.style.color = '#0a8f6f';
+                display.style.display = 'block';
+            }
+        }
+
+        function previewFromUrl(url) {
+            const preview = document.getElementById('post-preview');
+            const display = document.getElementById('post-id-display');
+            if (!url.trim()) {
+                // Only clear if no post card is selected
+                if (!selectedPostId) {
+                    preview.classList.remove('open');
+                    display.textContent = 'No post selected — scroll to pick one';
+                    display.style.color = '#8a9bab';
+                    display.style.display = 'block';
+                }
+                return;
+            }
+
+            // Detect platform from URL
+            let platform = 'facebook';
+            if (url.includes('instagram.com')) platform = 'instagram';
+
+            // Try to match against loaded posts
+            let matched = null;
+            for (const [pid, post] of Object.entries(postsLookup)) {
+                if (url.includes(pid) || (post.id && url.includes(post.id))) {
+                    matched = post;
+                    break;
+                }
+            }
+
+            const platClass = platform === 'instagram' ? 'plat-instagram' : 'plat-facebook';
+            const platLabel = platform === 'instagram' ? 'INSTAGRAM' : 'FACEBOOK';
+
+            if (matched) {
+                // Found in loaded posts — show full preview
+                const thumbHtml = matched.thumbnail
+                    ? `<img class="preview-thumb" src="${matched.thumbnail}" alt="" />`
+                    : '';
+                preview.innerHTML = `
+                    ${thumbHtml}
+                    <div class="preview-body">
+                        <span class="preview-platform ${platClass}">${platLabel}</span>
+                        <div class="preview-caption">${matched.message || 'No caption'}</div>
+                        <div class="preview-id">Post ID: ${matched.post_id}</div>
+                    </div>
+                `;
+                selectedPostId = matched.post_id;
+                document.getElementById('post-id').value = matched.post_id;
+            } else {
+                // Not in loaded posts — show URL preview
+                preview.innerHTML = `
+                    <div class="preview-body">
+                        <span class="preview-platform ${platClass}">${platLabel}</span>
+                        <div class="preview-caption" style="word-break:break-all;">${url}</div>
+                        <div class="preview-id" style="color:#52657F;">Link will be used directly</div>
+                    </div>
+                `;
+            }
+            preview.classList.add('open');
+            display.style.display = 'none';
+        }
+
         // Load on page load only (no auto-refresh to avoid Meta API rate limits)
+        loadPosts();
         loadCampaigns();
         loadStats();
     </script>
