@@ -974,10 +974,20 @@
             // Use resolved data if available
             let objectStoryId = null;
             let contentType = 'post'; // default
+            let useIgMedia = false;
+            let igMediaId = null;
+            let igAccountId = null;
+
             if (resolvedPost) {
                 if (resolvedPost.resolved) {
-                    postId = resolvedPost.post_id;
-                    objectStoryId = resolvedPost.object_story_id;
+                    if (resolvedPost.use_ig_media) {
+                        useIgMedia = true;
+                        igMediaId = resolvedPost.ig_media_id;
+                        igAccountId = resolvedPost.ig_account_id;
+                    } else {
+                        postId = resolvedPost.post_id;
+                        objectStoryId = resolvedPost.object_story_id;
+                    }
                     postCaption = resolvedPost.caption || '';
                 }
                 contentType = resolvedPost.content_type || 'post';
@@ -990,7 +1000,7 @@
                 if (/\/(reel|reels)\//i.test(contentUrl) || /\/videos\//i.test(contentUrl)) contentType = 'reel';
             }
 
-            if (!postId && !objectStoryId) {
+            if (!postId && !objectStoryId && !useIgMedia) {
                 showToast('Paste a valid post URL to launch', true);
                 btn.disabled = false;
                 btn.textContent = 'Launch Campaign';
@@ -1008,6 +1018,9 @@
                 object_story_id: objectStoryId,
                 campaign_name: campaignName,
                 content_type: contentType,
+                use_ig_media: useIgMedia,
+                ig_media_id: igMediaId,
+                ig_account_id: igAccountId,
                 platform,
                 ab_test: abTest,
                 countries,

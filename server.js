@@ -299,7 +299,7 @@ async function resolvePost(postUrl) {
 }
 
 async function launchCampaign(body) {
-  const { budget_php, duration_days, page_id, post_id, campaign_name, platform, ab_test, countries, content_type, object_story_id } = body;
+  const { budget_php, duration_days, page_id, post_id, campaign_name, platform, ab_test, countries, content_type, object_story_id, use_ig_media, ig_media_id, ig_account_id } = body;
   const name = campaign_name || `PGMN Campaign - ${budget_php}PHP ${duration_days}d`;
 
   // Determine objective & optimization based on content type
@@ -338,7 +338,19 @@ async function launchCampaign(body) {
     });
     if (adset.error) { results.adsets.push({ error: adset.error }); return adset; }
     results.adsets.push(adset);
-    if (storyId) {
+    if (use_ig_media && ig_media_id && ig_account_id) {
+      const creative = await metaPost(`${AD_ACCOUNT_ID}/adcreatives`, {
+        name: `${adsetName} - Creative`,
+        instagram_actor_id: ig_account_id,
+        source_instagram_media_id: ig_media_id,
+      });
+      if (creative.error) { results.ads.push({ error: creative.error }); return adset; }
+      const ad = await metaPost(`${AD_ACCOUNT_ID}/ads`, {
+        name: `${adsetName} - Ad`, adset_id: adset.id,
+        creative: JSON.stringify({ creative_id: creative.id }), status: 'PAUSED'
+      });
+      if (ad.error) { results.ads.push({ error: ad.error }); } else { results.ads.push(ad); }
+    } else if (storyId) {
       const creative = await metaPost(`${AD_ACCOUNT_ID}/adcreatives`, {
         name: `${adsetName} - Creative`, object_story_id: storyId
       });
