@@ -1009,7 +1009,8 @@
                     showToast(`Campaign created! ${campaignName}`);
                     loadCampaigns();
                 } else {
-                    showToast(data.error || data.detail || 'Launch failed', true);
+                    const errMsg = typeof data.error === 'object' ? (data.error.message || JSON.stringify(data.error)) : (data.error || data.detail || 'Launch failed');
+                    showToast(errMsg, true);
                 }
             } catch(e) {
                 showToast('Network error — is the backend running?', true);
