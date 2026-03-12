@@ -7,7 +7,13 @@ module.exports = async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
 
   try {
-    const { budget_php, duration_days, page_id, post_id, campaign_name, platform, ab_test, countries, content_type, object_story_id, use_ig_media, ig_media_id, ig_account_id } = req.body;
+    const {
+      budget_php, duration_days, page_id, post_id, campaign_name,
+      platform, ab_test, countries, content_type,
+      object_story_id, creative_id,
+      use_ig_media, ig_media_id, ig_account_id,
+    } = req.body;
+
     const name = campaign_name || `PGMN Campaign - ${budget_php}PHP ${duration_days}d`;
 
     // Determine objective & optimization based on content type
@@ -18,7 +24,8 @@ module.exports = async function handler(req, res) {
     // 1. Create campaign
     const campaign = await metaPost(`${AD_ACCOUNT_ID}/campaigns`, {
       name, objective, status: 'PAUSED',
-      special_ad_categories: '[]'
+      special_ad_categories: '[]',
+      is_adset_budget_sharing_enabled: 'false'
     });
     if (campaign.error) return res.status(400).json(campaign);
 
@@ -33,8 +40,6 @@ module.exports = async function handler(req, res) {
     else targeting.publisher_platforms = ['facebook', 'instagram'];
 
     const results = { campaign_id: campaign.id, adsets: [], ads: [], objective, optimization_goal: optimizationGoal };
-
-    // Use resolved object_story_id if provided, otherwise construct from page_id + post_id
     const storyId = object_story_id || (page_id && post_id ? `${page_id}_${post_id}` : null);
 
     const createAdSet = async (adsetName, budgetPhp, extraTargeting = {}) => {
@@ -42,7 +47,9 @@ module.exports = async function handler(req, res) {
       const adset = await metaPost(`${AD_ACCOUNT_ID}/adsets`, {
         campaign_id: campaign.id, name: adsetName,
         lifetime_budget: String(Math.round(budgetPhp * 100)),
+        bid_strategy: 'LOWEST_COST_WITHOUT_CAP',
         optimization_goal: optimizationGoal, billing_event: 'IMPRESSIONS',
+        destination_type: 'ON_POST',
         start_time: fmt(now), end_time: fmt(end),
         targeting: JSON.stringify(t), status: 'PAUSED'
       });
@@ -52,41 +59,40 @@ module.exports = async function handler(req, res) {
       }
       results.adsets.push(adset);
 
-      // Create ad creative and ad
-      if (use_ig_media && ig_media_id && ig_account_id) {
-        // Instagram media — use source_instagram_media_id
-        const creative = await metaPost(`${AD_ACCOUNT_ID}/adcreatives`, {
-          name: `${adsetName} - Creative`,
-          instagram_actor_id: ig_account_id,
-          source_instagram_media_id: ig_media_id,
-        });
+      // ─── Determine creative to use ───
+      let creativeIdToUse = creative_id; // Reuse existing creative from resolve-post
+
+      if (!creativeIdToUse) {
+        // No existing creative — create a new one
+        let creative;
+        if (use_ig_media && ig_media_id && ig_account_id) {
+          creative = await metaPost(`${AD_ACCOUNT_ID}/adcreatives`, {
+            name: `${adsetName} - Creative`,
+            instagram_user_id: ig_account_id,
+            source_instagram_media_id: ig_media_id,
+          });
+        } else if (storyId) {
+          creative = await metaPost(`${AD_ACCOUNT_ID}/adcreatives`, {
+            name: `${adsetName} - Creative`, object_story_id: storyId
+          });
+        }
+        if (!creative) {
+          results.ads.push({ error: 'No creative_id, ig_media, or object_story_id provided' });
+          return adset;
+        }
         if (creative.error) {
           results.ads.push({ error: creative.error });
           return adset;
         }
-        const ad = await metaPost(`${AD_ACCOUNT_ID}/ads`, {
-          name: `${adsetName} - Ad`, adset_id: adset.id,
-          creative: JSON.stringify({ creative_id: creative.id }), status: 'PAUSED'
-        });
-        if (ad.error) { results.ads.push({ error: ad.error }); } else { results.ads.push(ad); }
-      } else if (storyId) {
-        const creative = await metaPost(`${AD_ACCOUNT_ID}/adcreatives`, {
-          name: `${adsetName} - Creative`, object_story_id: storyId
-        });
-        if (creative.error) {
-          results.ads.push({ error: creative.error });
-          return adset;
-        }
-        const ad = await metaPost(`${AD_ACCOUNT_ID}/ads`, {
-          name: `${adsetName} - Ad`, adset_id: adset.id,
-          creative: JSON.stringify({ creative_id: creative.id }), status: 'PAUSED'
-        });
-        if (ad.error) {
-          results.ads.push({ error: ad.error });
-        } else {
-          results.ads.push(ad);
-        }
+        creativeIdToUse = creative.id;
       }
+
+      // 3. Create ad using the creative
+      const ad = await metaPost(`${AD_ACCOUNT_ID}/ads`, {
+        name: `${adsetName} - Ad`, adset_id: adset.id,
+        creative: JSON.stringify({ creative_id: creativeIdToUse }), status: 'PAUSED'
+      });
+      if (ad.error) { results.ads.push({ error: ad.error }); } else { results.ads.push(ad); }
       return adset;
     };
 

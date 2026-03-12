@@ -847,9 +847,11 @@
             let useIgMedia = false;
             let igMediaId = null;
             let igAccountId = null;
+            let creativeId = null;
 
             if (resolvedPost) {
                 if (resolvedPost.resolved) {
+                    creativeId = resolvedPost.creative_id || null;
                     if (resolvedPost.use_ig_media) {
                         useIgMedia = true;
                         igMediaId = resolvedPost.ig_media_id;
@@ -875,6 +877,14 @@
                 return;
             }
 
+            // Warn if post has no existing creative (never promoted via Business Suite)
+            if (!creativeId && useIgMedia) {
+                showToast('This post needs to be boosted once in Meta Business Suite before launching here.', true);
+                btn.disabled = false;
+                btn.textContent = 'Launch Campaign';
+                return;
+            }
+
             const campaignName = generateCampaignName(postCaption, budgetPhp, durationDays, platform);
 
             const body = {
@@ -884,6 +894,7 @@
                 page_id: '394530007066390',
                 post_id: postId,
                 object_story_id: objectStoryId,
+                creative_id: creativeId,
                 campaign_name: campaignName,
                 content_type: contentType,
                 use_ig_media: useIgMedia,

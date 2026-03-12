@@ -74,17 +74,19 @@ module.exports = async function handler(req, res) {
         const postId = matched.object_story_id.includes('_') ? matched.object_story_id.split('_')[1] : matched.object_story_id;
         return res.status(200).json({
           resolved: true, object_story_id: matched.object_story_id, post_id: postId,
+          creative_id: matched.id,
           caption: matched.body || matched.title || matched.name || '',
           thumbnail: matched.thumbnail_url || null, platform, content_type,
           source: 'ad_creatives',
         });
       } else if (matched.source_instagram_media_id) {
-        // IG-native creative — use instagram_actor_id + source_instagram_media_id approach
+        // IG-native creative — reuse existing creative_id
         const igAccountId = await getIgAccountId();
         return res.status(200).json({
           resolved: true,
           ig_media_id: matched.source_instagram_media_id,
           ig_account_id: igAccountId,
+          creative_id: matched.id,
           caption: matched.body || matched.title || matched.name || '',
           thumbnail: matched.thumbnail_url || null, platform, content_type,
           use_ig_media: true,
