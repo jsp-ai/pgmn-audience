@@ -91,12 +91,31 @@ module.exports = async function handler(req, res) {
             limit: '50'
           });
 
+          if (igMedia.error) {
+            return res.status(200).json({
+              resolved: false, url_id: urlId, platform, content_type,
+              ig_account_id: igAccountId,
+              debug_media_error: igMedia.error,
+              message: 'Failed to fetch Instagram media.',
+            });
+          }
+
           let igMatched = null;
+          const mediaCount = (igMedia.data || []).length;
           for (const m of (igMedia.data || [])) {
             if (m.shortcode === urlId || (m.permalink && m.permalink.includes(urlId))) {
               igMatched = m;
               break;
             }
+          }
+
+          if (!igMatched) {
+            return res.status(200).json({
+              resolved: false, url_id: urlId, platform, content_type,
+              ig_account_id: igAccountId,
+              media_checked: mediaCount,
+              message: `Post not found in last ${mediaCount} Instagram posts. Try increasing limit or check if post belongs to this page.`,
+            });
           }
 
           if (igMatched) {
