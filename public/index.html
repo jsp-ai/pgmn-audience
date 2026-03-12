@@ -267,6 +267,33 @@
         .campaign-card .actions button:hover { border-color: #FB041C; color: #FB041C; background: #FFF5F5; }
         .campaign-card .actions button.danger:hover { border-color: #d00; color: #d00; background: #FFF0F0; }
 
+        /* ─── Country Selector ─── */
+        .country-grid {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-top: 4px;
+        }
+        .country-btn {
+            padding: 6px 12px;
+            border: 1px solid #D5DAE0;
+            border-radius: 5px;
+            background: #F7F8FA;
+            font-family: 'DM Sans', sans-serif;
+            font-size: 12px;
+            font-weight: 600;
+            color: #52657F;
+            cursor: pointer;
+            transition: all 0.15s;
+            user-select: none;
+        }
+        .country-btn:hover { border-color: #52657F; }
+        .country-btn.selected {
+            background: #162831;
+            color: #FFFFFF;
+            border-color: #162831;
+        }
+
         /* ─── AI Badges on Cards ─── */
         .ai-badge-card {
             font-family: 'Bebas Neue', sans-serif;
@@ -466,6 +493,22 @@
                     <option value="instagram_only">Instagram Only</option>
                 </select>
 
+                <label>Target Countries</label>
+                <div class="country-grid" id="country-selector">
+                    <span class="country-btn selected" data-code="PH">🇵🇭 PH</span>
+                    <span class="country-btn" data-code="US">🇺🇸 US</span>
+                    <span class="country-btn" data-code="SA">🇸🇦 Saudi</span>
+                    <span class="country-btn" data-code="CA">🇨🇦 Canada</span>
+                    <span class="country-btn" data-code="AE">🇦🇪 UAE</span>
+                    <span class="country-btn" data-code="AU">🇦🇺 Aus</span>
+                    <span class="country-btn" data-code="JP">🇯🇵 Japan</span>
+                    <span class="country-btn" data-code="QA">🇶🇦 Qatar</span>
+                    <span class="country-btn" data-code="KW">🇰🇼 Kuwait</span>
+                    <span class="country-btn" data-code="SG">🇸🇬 SG</span>
+                    <span class="country-btn" data-code="HK">🇭🇰 HK</span>
+                    <span class="country-btn" data-code="GB">🇬🇧 UK</span>
+                </div>
+
                 <div class="toggle-row">
                     <span>A/B Test (split audience)</span>
                     <div class="toggle" id="ab-toggle" onclick="this.classList.toggle('active')"></div>
@@ -508,6 +551,21 @@
             toast.textContent = msg;
             toast.className = `toast show ${isError ? 'error' : ''}`;
             setTimeout(() => toast.className = 'toast', 3000);
+        }
+
+        // Country selector toggle
+        document.getElementById('country-selector').addEventListener('click', function(e) {
+            const btn = e.target.closest('.country-btn');
+            if (!btn) return;
+            btn.classList.toggle('selected');
+            // Ensure at least PH is always selected
+            const selected = this.querySelectorAll('.selected');
+            if (!selected.length) btn.classList.add('selected');
+        });
+
+        function getSelectedCountries() {
+            return [...document.querySelectorAll('#country-selector .country-btn.selected')]
+                .map(b => b.dataset.code);
         }
 
         function formatNum(n) {
@@ -621,6 +679,7 @@
                 post_id: document.getElementById('post-id').value || null,
                 platform: document.getElementById('platform').value,
                 ab_test: document.getElementById('ab-toggle').classList.contains('active'),
+                countries: getSelectedCountries(),
             };
 
             if (!body.content_url || !body.page_id) {

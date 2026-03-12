@@ -263,7 +263,7 @@ function calculateMetrics(insight) {
 }
 
 async function launchCampaign(body) {
-  const { content_url, budget_php, duration_days, page_id, post_id, campaign_name, platform, ab_test } = body;
+  const { content_url, budget_php, duration_days, page_id, post_id, campaign_name, platform, ab_test, countries } = body;
   const name = campaign_name || `PGMN Burst - ${budget_php}PHP ${duration_days}d`;
 
   // 1. Create campaign
@@ -277,7 +277,8 @@ async function launchCampaign(body) {
   const end = new Date(now.getTime() + duration_days * 86400000);
   const fmt = d => d.toISOString().replace(/\.\d+Z$/, '+0800');
 
-  const targeting = { geo_locations: { countries: ['PH'] }, age_min: 18, age_max: 65 };
+  const targetCountries = countries && countries.length ? countries : ['PH'];
+  const targeting = { geo_locations: { countries: targetCountries }, age_min: 18, age_max: 65 };
   if (platform === 'facebook_only') targeting.publisher_platforms = ['facebook'];
   else if (platform === 'instagram_only') targeting.publisher_platforms = ['instagram'];
   else targeting.publisher_platforms = ['facebook', 'instagram'];
