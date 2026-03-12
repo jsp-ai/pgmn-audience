@@ -755,28 +755,12 @@
                     </div>
                 </div>
 
-                <label>Select Post</label>
-
-                <div style="font-size:11px;font-weight:600;color:#1877F2;margin-bottom:4px;margin-top:8px;display:flex;align-items:center;gap:6px;">f Facebook Posts <button class="refresh-btn" onclick="loadPosts(true)" title="Refresh Facebook posts">&#x21bb;</button></div>
-                <div class="post-carousel">
-                    <button class="carousel-arrow arrow-left hidden" onclick="scrollRow('fb-picker',-1)">&lsaquo;</button>
-                    <div id="fb-picker" class="post-picker"></div>
-                    <button class="carousel-arrow arrow-right hidden" onclick="scrollRow('fb-picker',1)">&rsaquo;</button>
-                </div>
-
-                <div style="font-size:11px;font-weight:600;margin-bottom:4px;margin-top:12px;display:flex;align-items:center;gap:6px;"><span style="background:linear-gradient(45deg,#f09433,#e6683c,#dc2743,#cc2366,#bc1888);-webkit-background-clip:text;-webkit-text-fill-color:transparent;">Instagram Posts</span> <button class="refresh-btn" onclick="loadPosts(true)" title="Refresh Instagram posts">&#x21bb;</button></div>
-                <div class="post-carousel">
-                    <button class="carousel-arrow arrow-left hidden" onclick="scrollRow('ig-picker',-1)">&lsaquo;</button>
-                    <div id="ig-picker" class="post-picker"></div>
-                    <button class="carousel-arrow arrow-right hidden" onclick="scrollRow('ig-picker',1)">&rsaquo;</button>
-                </div>
-
-                <label style="margin-top:16px;">Or Paste a Post Link</label>
+                <label>Paste Post Link</label>
                 <input type="text" id="content-url" placeholder="https://facebook.com/pgmn/posts/... or https://instagram.com/p/..." oninput="previewFromUrl(this.value)" />
 
                 <input type="hidden" id="post-id" />
                 <div class="post-preview" id="post-preview"></div>
-                <div style="font-size:11px;color:#8a9bab;margin-top:6px;" id="post-id-display">No post selected — scroll to pick one</div>
+                <div style="font-size:11px;color:#8a9bab;margin-top:6px;" id="post-id-display">Paste a post link above to preview</div>
 
                 <button class="btn btn-primary" id="launch-btn" onclick="launchCampaign()">
                     Launch Campaign
@@ -927,28 +911,83 @@
             if (el) el.classList.toggle('open');
         }
 
+        function extractPostIdFromUrl(url) {
+            if (!url) return null;
+            const igMatch = url.match(/instagram\.com\/(?:p|reel)\/([A-Za-z0-9_-]+)/);
+            if (igMatch) return igMatch[1];
+            const fbPostMatch = url.match(/\/posts\/(\d+)/);
+            if (fbPostMatch) return fbPostMatch[1];
+            const fbVideoMatch = url.match(/\/videos\/(\d+)/);
+            if (fbVideoMatch) return fbVideoMatch[1];
+            const fbStoryMatch = url.match(/story_fbid=(\d+)/);
+            if (fbStoryMatch) return fbStoryMatch[1];
+            const pfbidMatch = url.match(/(pfbid[A-Za-z0-9]+)/);
+            if (pfbidMatch) return pfbidMatch[1];
+            return null;
+        }
+
+        function generateCampaignName(postCaption, budgetPhp, durationDays, platform) {
+            const words = (postCaption || '').replace(/[^\w\s'-]/g, '').trim().split(/\s+/).filter(Boolean);
+            const desc = words.slice(0, 6).join(' ') || 'Untitled';
+            const budgetStr = budgetPhp >= 1000 ? (budgetPhp / 1000) + 'k' : String(budgetPhp);
+            const durStr = durationDays === 1 ? '1 day' : durationDays + ' days';
+            const platStr = platform === 'instagram_only' ? 'Instagram'
+                          : platform === 'facebook_only' ? 'Facebook'
+                          : 'Facebook + Instagram';
+            return `${desc} - ${budgetStr} ${durStr} - ${platStr}`;
+        }
+
         async function launchCampaign() {
             const btn = document.getElementById('launch-btn');
             btn.disabled = true;
             btn.textContent = 'Launching...';
 
-            const body = {
-                content_url: document.getElementById('content-url').value,
-                budget_php: parseFloat(document.getElementById('budget').value),
-                duration_days: parseInt(document.getElementById('duration').value),
-                page_id: '394530007066390',
-                post_id: document.getElementById('post-id').value || null,
-                platform: document.getElementById('platform').value,
-                ab_test: document.getElementById('ab-toggle').classList.contains('active'),
-                countries: getSelectedCountries(),
-            };
+            const contentUrl = document.getElementById('content-url').value.trim();
+            const budgetPhp = parseFloat(document.getElementById('budget').value);
+            const durationDays = parseInt(document.getElementById('duration').value);
+            const platform = document.getElementById('platform').value;
+            const abTest = document.getElementById('ab-toggle').classList.contains('active');
+            const countries = getSelectedCountries();
 
-            if (!body.content_url) {
-                showToast('Content URL is required', true);
+            let postId = document.getElementById('post-id').value || null;
+            let postCaption = '';
+
+            if (!postId && contentUrl) {
+                for (const [pid, post] of Object.entries(postsLookup)) {
+                    if (contentUrl.includes(pid) || (post.id && contentUrl.includes(post.id))) {
+                        postId = pid;
+                        break;
+                    }
+                }
+                if (!postId) {
+                    postId = extractPostIdFromUrl(contentUrl);
+                }
+            }
+
+            if (postId && postsLookup[postId]) {
+                postCaption = postsLookup[postId].message || '';
+            }
+
+            if (!postId) {
+                showToast('Select a post or paste a valid post URL', true);
                 btn.disabled = false;
                 btn.textContent = 'Launch Campaign';
                 return;
             }
+
+            const campaignName = generateCampaignName(postCaption, budgetPhp, durationDays, platform);
+
+            const body = {
+                content_url: contentUrl,
+                budget_php: budgetPhp,
+                duration_days: durationDays,
+                page_id: '394530007066390',
+                post_id: postId,
+                campaign_name: campaignName,
+                platform,
+                ab_test: abTest,
+                countries,
+            };
 
             try {
                 const res = await fetch(`${API}/api/launch`, {
@@ -959,10 +998,10 @@
                 const data = await res.json();
 
                 if (res.ok) {
-                    showToast(`Campaign created! ID: ${data.data.campaign_id}`);
+                    showToast(`Campaign created! ${campaignName}`);
                     loadCampaigns();
                 } else {
-                    showToast(data.detail || 'Launch failed', true);
+                    showToast(data.error || data.detail || 'Launch failed', true);
                 }
             } catch(e) {
                 showToast('Network error — is the backend running?', true);
@@ -1263,11 +1302,16 @@
                 selectedPostId = matched.post_id;
                 document.getElementById('post-id').value = matched.post_id;
             } else {
+                const extractedId = extractPostIdFromUrl(url);
+                if (extractedId) {
+                    selectedPostId = extractedId;
+                    document.getElementById('post-id').value = extractedId;
+                }
                 preview.innerHTML = `
                     <div class="preview-body">
                         <span class="preview-platform ${platClass}">${platLabel}</span>
                         <div class="preview-caption" style="word-break:break-all;">${url}</div>
-                        <div class="preview-id" style="color:#52657F;">Link will be used directly</div>
+                        <div class="preview-id" style="color:#52657F;">${extractedId ? 'Post ID: ' + extractedId : 'Could not extract Post ID'}</div>
                     </div>
                 `;
             }
@@ -1276,7 +1320,6 @@
         }
 
         // Load on page load only (no auto-refresh to avoid Meta API rate limits)
-        loadPosts();
         loadCampaigns();
         loadStats();
     </script>
