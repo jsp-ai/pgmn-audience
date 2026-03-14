@@ -4,6 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PGMN Ad Launcher</title>
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="/favicon-192.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -233,6 +236,7 @@
         }
         .status-active { background: rgba(251, 4, 28, 0.1); color: #FB041C; }
         .status-paused { background: rgba(200, 160, 0, 0.1); color: #B08C00; }
+        .status-processing { background: rgba(59, 130, 246, 0.12); color: #2563EB; }
         .status-completed { background: rgba(82, 101, 127, 0.1); color: #52657F; }
         .campaign-card .meta-info {
             font-size: 12px;
@@ -310,20 +314,20 @@
             border-color: #162831;
         }
 
-        /* ─── Quick Templates ─── */
-        .template-grid {
+        /* ─── Budget Selector ─── */
+        .budget-grid {
             display: flex;
             flex-wrap: wrap;
             gap: 6px;
-            margin-bottom: 16px;
+            margin-bottom: 12px;
         }
-        .template-btn {
-            padding: 7px 10px;
+        .budget-btn {
+            padding: 7px 12px;
             border: 1px solid #D5DAE0;
             border-radius: 6px;
             background: #F7F8FA;
             font-family: 'DM Sans', sans-serif;
-            font-size: 11px;
+            font-size: 12px;
             font-weight: 600;
             color: #52657F;
             cursor: pointer;
@@ -331,38 +335,81 @@
             user-select: none;
             line-height: 1.3;
         }
-        .template-btn:hover { border-color: #52657F; background: #fff; }
-        .template-btn.active {
+        .budget-btn:hover { border-color: #52657F; background: #fff; }
+        .budget-btn.active {
             background: #162831;
             color: #FFFFFF;
             border-color: #162831;
         }
-        .template-detail {
+
+        /* ─── Geo Search Autocomplete ─── */
+        .geo-search-wrap {
+            position: relative;
+            margin-top: 8px;
             display: none;
-            padding: 10px 12px;
-            background: #F0F2F5;
+        }
+        .geo-search-wrap.open { display: block; }
+        .geo-search-wrap input {
+            width: 100%;
+            padding: 8px 10px;
+            border: 1px solid #D5DAE0;
             border-radius: 6px;
-            font-size: 11px;
-            color: #3a4f5c;
-            margin-bottom: 12px;
-            line-height: 1.6;
-            border-left: 3px solid #FB041C;
+            font-family: 'DM Sans', sans-serif;
+            font-size: 12px;
         }
-        .template-detail.open { display: block; }
-        .template-detail .td-row { display: flex; gap: 16px; flex-wrap: wrap; }
-        .template-detail .td-item { }
-        .template-detail .td-label {
-            font-family: 'Bebas Neue', sans-serif;
+        .geo-results {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: #fff;
+            border: 1px solid #D5DAE0;
+            border-top: none;
+            border-radius: 0 0 6px 6px;
+            max-height: 180px;
+            overflow-y: auto;
+            z-index: 50;
+            display: none;
+        }
+        .geo-results.open { display: block; }
+        .geo-result-item {
+            padding: 8px 10px;
+            font-size: 12px;
+            cursor: pointer;
+            border-bottom: 1px solid #F0F2F5;
+        }
+        .geo-result-item:hover { background: #F0F2F5; }
+        .geo-result-item .geo-region {
             font-size: 10px;
-            letter-spacing: 1px;
             color: #8a9bab;
-            text-transform: uppercase;
+            margin-left: 4px;
         }
-        .template-detail .td-val {
-            font-weight: 700;
+        .geo-chips {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+            margin-top: 6px;
+        }
+        .geo-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 3px 8px;
+            background: #E8F0FE;
+            border: 1px solid #B0C4DE;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 500;
             color: #162831;
-            font-size: 13px;
         }
+        .geo-chip .remove {
+            cursor: pointer;
+            color: #8a9bab;
+            font-weight: 700;
+            font-size: 13px;
+            line-height: 1;
+        }
+        .geo-chip .remove:hover { color: #FB041C; }
 
         /* ─── Post Preview ─── */
         .post-preview {
@@ -560,9 +607,89 @@
             .btn { padding: 12px; font-size: 16px; margin-top: 16px; }
             .btn-secondary { margin-top: 8px; }
         }
+
+        /* ─── Lock Screen ─── */
+        .lock-screen {
+            position: fixed; inset: 0; z-index: 9999;
+            background: #162831;
+            display: flex; align-items: center; justify-content: center;
+            flex-direction: column; gap: 24px;
+        }
+        .lock-screen.hidden { display: none; }
+        .lock-logo { text-align: center; }
+        .lock-logo h1 {
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: 48px; font-weight: 400; letter-spacing: 3px;
+        }
+        .lock-logo .pg { color: #FB041C; }
+        .lock-logo .mn { color: #fff; }
+        .lock-form {
+            display: flex; flex-direction: column; gap: 12px;
+            width: 300px;
+        }
+        .lock-form input {
+            padding: 14px 16px; border-radius: 10px; border: 2px solid #2a3e4c;
+            background: #1e3240; color: #fff; font-size: 16px;
+            font-family: 'DM Sans', sans-serif; text-align: center;
+            outline: none; transition: border-color 0.2s;
+        }
+        .lock-form input::placeholder { color: #52657F; }
+        .lock-form input:focus { border-color: #FB041C; }
+        .lock-form input.shake {
+            animation: shake 0.4s ease-in-out;
+            border-color: #FB041C;
+        }
+        .lock-form button {
+            padding: 14px; border-radius: 10px; border: none;
+            background: #FB041C; color: #fff; font-size: 16px;
+            font-weight: 600; font-family: 'DM Sans', sans-serif;
+            cursor: pointer; transition: background 0.2s;
+        }
+        .lock-form button:hover { background: #d9031a; }
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-8px); }
+            75% { transform: translateX(8px); }
+        }
+        .app-wrapper.locked { display: none; }
     </style>
 </head>
 <body>
+    <!-- Lock Screen -->
+    <div class="lock-screen" id="lock-screen">
+        <div class="lock-logo">
+            <h1><span class="pg">PG</span><span class="mn">MN</span></h1>
+            <div style="color:#52657F; font-size:14px; margin-top:4px;">Ad Launcher</div>
+        </div>
+        <div class="lock-form">
+            <input type="password" id="lock-password" placeholder="Enter password" autocomplete="off" />
+            <button onclick="checkPassword()">Unlock</button>
+        </div>
+    </div>
+    <script>
+        function checkPassword() {
+            const input = document.getElementById('lock-password');
+            if (input.value === 'jspworldwide') {
+                sessionStorage.setItem('pgmn_unlocked', '1');
+                document.getElementById('lock-screen').classList.add('hidden');
+                document.getElementById('app-wrapper').classList.remove('locked');
+            } else {
+                input.value = '';
+                input.classList.add('shake');
+                setTimeout(() => input.classList.remove('shake'), 400);
+            }
+        }
+        document.addEventListener('DOMContentLoaded', () => {
+            const input = document.getElementById('lock-password');
+            if (input) input.addEventListener('keydown', e => { if (e.key === 'Enter') checkPassword(); });
+            if (sessionStorage.getItem('pgmn_unlocked') === '1') {
+                document.getElementById('lock-screen').classList.add('hidden');
+                document.getElementById('app-wrapper').classList.remove('locked');
+            }
+        });
+    </script>
+
+    <div id="app-wrapper" class="app-wrapper locked">
     <div class="header">
       <div class="header-inner">
         <div>
@@ -582,6 +709,9 @@
                 <div class="stat-label">Total Monthly Spend</div>
                 <div class="stat-value" id="stat-monthly">--</div>
             </div>
+            <div style="display:flex;align-items:center;margin-left:8px;">
+                <button onclick="document.getElementById('token-modal').style.display='flex'" style="background:none;border:none;cursor:pointer;font-size:20px;color:#52657F;padding:4px;" title="Token Settings">&#9881;</button>
+            </div>
         </div>
       </div>
     </div>
@@ -591,56 +721,69 @@
             <div class="panel">
                 <h2><div class="dot"></div> Launch Campaign</h2>
 
-                <div class="template-grid">
-                    <div class="template-btn" onclick="applyTemplate(this, 'reel_ph')">Reel Burst (PH)</div>
-                    <div class="template-btn" onclick="applyTemplate(this, 'reel_diaspora')">Reel Burst (Diaspora)</div>
-                    <div class="template-btn" onclick="applyTemplate(this, 'news_push')">News Push</div>
-                    <div class="template-btn" onclick="applyTemplate(this, 'scale_winner')">Scale Winner</div>
-                    <div class="template-btn" onclick="applyTemplate(this, 'ab_test')">A/B Test</div>
-                    <div class="template-btn" onclick="applyTemplate(this, 'custom')">Custom</div>
-                </div>
-                <div class="template-detail" id="template-detail"></div>
-
-                <div id="custom-fields" style="display:none;">
-                    <div class="row">
-                        <div>
-                            <label>Budget (PHP)</label>
-                            <input type="number" id="budget" placeholder="5000" value="3000" />
-                        </div>
-                        <div>
-                            <label>Duration (Days)</label>
-                            <input type="number" id="duration" placeholder="3" value="3" />
-                        </div>
-                    </div>
-
-                    <label>Platform</label>
-                    <select id="platform">
-                        <option value="both">Facebook + Instagram</option>
-                        <option value="facebook_only">Facebook Only</option>
-                        <option value="instagram_only">Instagram Only</option>
-                    </select>
-
-                    <label>Target Countries</label>
-                    <div class="country-grid" id="country-selector">
-                        <span class="country-btn selected" data-code="PH">🇵🇭 PH</span>
-                        <span class="country-btn" data-code="US">🇺🇸 US</span>
-                        <span class="country-btn" data-code="SA">🇸🇦 Saudi</span>
-                        <span class="country-btn" data-code="CA">🇨🇦 Canada</span>
-                        <span class="country-btn" data-code="AE">🇦🇪 UAE</span>
-                    </div>
-
-                    <div class="toggle-row">
-                        <span>A/B Test (split audience)</span>
-                        <div class="toggle" id="ab-toggle" onclick="this.classList.toggle('active')"></div>
-                    </div>
-                </div>
-
                 <label>Paste Post Link</label>
                 <input type="text" id="content-url" placeholder="https://facebook.com/pgmn/posts/... or https://instagram.com/p/..." oninput="previewFromUrl(this.value)" />
 
                 <input type="hidden" id="post-id" />
                 <div class="post-preview" id="post-preview"></div>
                 <div style="font-size:11px;color:#8a9bab;margin-top:6px;" id="post-id-display">Paste a post link above to preview</div>
+
+                <label>Campaign Name</label>
+                <input type="text" id="campaign-name" placeholder="Auto-generated from post & settings" />
+                <div style="font-size:10px;color:#8a9bab;margin-top:3px;">Auto-filled when post resolves. Edit to customize.</div>
+
+                <label>Budget (PHP)</label>
+                <div class="budget-grid" id="budget-selector">
+                    <div class="budget-btn" data-amount="500" onclick="selectBudget(this)">₱500</div>
+                    <div class="budget-btn" data-amount="1000" onclick="selectBudget(this)">₱1K</div>
+                    <div class="budget-btn" data-amount="2000" onclick="selectBudget(this)">₱2K</div>
+                    <div class="budget-btn active" data-amount="3000" onclick="selectBudget(this)">₱3K</div>
+                    <div class="budget-btn" data-amount="5000" onclick="selectBudget(this)">₱5K</div>
+                    <div class="budget-btn" data-amount="10000" onclick="selectBudget(this)">₱10K</div>
+                    <div class="budget-btn" data-amount="custom" onclick="selectBudget(this)">Custom</div>
+                </div>
+                <input type="number" id="budget" value="3000" style="display:none;" placeholder="Enter amount" />
+
+                <div class="row">
+                    <div style="flex:1">
+                        <label>Duration (Days)</label>
+                        <input type="number" id="duration" placeholder="2" value="2" />
+                    </div>
+                </div>
+
+                <label>Target Countries</label>
+                <div class="country-grid" id="country-selector">
+                    <span class="country-btn selected" data-code="PH">🇵🇭 PH</span>
+                    <span class="country-btn" data-code="US">🇺🇸 US</span>
+                    <span class="country-btn" data-code="SA">🇸🇦 Saudi</span>
+                    <span class="country-btn" data-code="CA">🇨🇦 Canada</span>
+                    <span class="country-btn" data-code="AE">🇦🇪 UAE</span>
+                </div>
+
+                <div class="geo-search-wrap" id="geo-search-wrap">
+                    <label>Target Regions / Cities (PH)</label>
+                    <input type="text" id="geo-search" placeholder="Start typing a city or region... (e.g. Cebu)" autocomplete="off" />
+                    <div class="geo-results" id="geo-results"></div>
+                    <div class="geo-chips" id="geo-chips"></div>
+                    <div style="font-size:10px;color:#8a9bab;margin-top:3px;">Leave empty to target all of Philippines</div>
+                </div>
+
+                <div class="toggle-row">
+                    <span>A/B Test (split audience)</span>
+                    <div class="toggle" id="ab-toggle" onclick="this.classList.toggle('active')"></div>
+                </div>
+
+                <div class="toggle-row">
+                    <span>Political Disclaimer (Paid-for by PGMN)</span>
+                    <div class="toggle" id="political-toggle" onclick="this.classList.toggle('active')"></div>
+                </div>
+
+                <div style="margin-top:16px;padding:10px 12px;background:#FFF8F0;border:1px solid #F0DCC8;border-radius:6px;font-size:11px;line-height:1.7;color:#7a5c3a;">
+                    <strong style="font-family:'Bebas Neue',sans-serif;font-size:11px;letter-spacing:1px;color:#B08C00;">BOOST RULES</strong><br/>
+                    <span style="color:#e74c3c;">●</span> Max <strong>10 slides</strong> on IG carousels<br/>
+                    <span style="color:#e74c3c;">●</span> <strong>Tagged or collab</strong> posts cannot be boosted<br/>
+                    <span style="color:#e74c3c;">●</span> <strong>Political posts</strong> require a paid-for disclaimer
+                </div>
 
                 <button class="btn btn-primary" id="launch-btn" onclick="launchCampaign()">
                     Launch Campaign
@@ -683,9 +826,11 @@
             const btn = e.target.closest('.country-btn');
             if (!btn) return;
             btn.classList.toggle('selected');
-            // Ensure at least PH is always selected
+            // Ensure at least one country is always selected
             const selected = this.querySelectorAll('.selected');
             if (!selected.length) btn.classList.add('selected');
+            // Show/hide PH geo search
+            updateGeoSearchVisibility();
         });
 
         function getSelectedCountries() {
@@ -731,8 +876,11 @@
             }
 
             list.innerHTML = campaigns.map(c => {
+                const isProcessing = c.status === 'IN_PROCESS' || c.status === 'WITH_ISSUES';
                 const statusClass = c.status === 'ACTIVE' ? 'status-active' :
-                                   c.status === 'PAUSED' ? 'status-paused' : 'status-completed';
+                                   c.status === 'PAUSED' ? 'status-paused' :
+                                   isProcessing ? 'status-processing' : 'status-completed';
+                const statusLabel = isProcessing ? 'PROCESSING' : c.status;
                 const budget = c.total_budget ? formatNum(c.total_budget) : '--';
                 const i = c.insights || {};
                 const engPeso = i.eng_per_peso || 0;
@@ -759,7 +907,7 @@
                             <div class="name">${c.name}</div>
                             <div style="display:flex;gap:6px;align-items:center;">
                                 ${badgeHtml}
-                                <span class="status ${statusClass}">${c.status}</span>
+                                <span class="status ${statusClass}">${statusLabel}</span>
                             </div>
                         </div>
                         <div class="meta-info">
@@ -775,7 +923,7 @@
                             <div class="metric"><div class="val ${epClass}">${engPeso || '--'}</div><div class="lbl">Eng/PHP</div></div>
                         </div>
                         <div class="actions">
-                            ${c.status === 'ACTIVE' ?
+                            ${c.status === 'ACTIVE' || isProcessing ?
                                 `<button onclick="updateStatus('${c.id}', 'pause')">Pause</button>` :
                                 `<button onclick="updateStatus('${c.id}', 'activate')">Activate</button>`
                             }
@@ -794,18 +942,25 @@
         function extractPostIdFromUrl(url) {
             if (!url) return null;
             // Instagram: /p/SHORTCODE/ or /reel/SHORTCODE/
-            const igMatch = url.match(/instagram\.com\/(?:p|reel)\/([A-Za-z0-9_-]+)/);
+            const igMatch = url.match(/instagram\.com\/(?:[\w.]+\/)?(?:p|reel|reels)\/([A-Za-z0-9_-]+)/);
             if (igMatch) return igMatch[1];
             // Facebook: /posts/ID or /videos/ID or story_fbid=ID or /pfbid...
             const fbPostMatch = url.match(/\/posts\/(\d+)/);
             if (fbPostMatch) return fbPostMatch[1];
             const fbVideoMatch = url.match(/\/videos\/(\d+)/);
             if (fbVideoMatch) return fbVideoMatch[1];
+            const fbReelMatch = url.match(/facebook\.com\/(?:[\w.]+\/)?reel\/(\d+)/);
+            if (fbReelMatch) return fbReelMatch[1];
             const fbStoryMatch = url.match(/story_fbid=(\d+)/);
             if (fbStoryMatch) return fbStoryMatch[1];
             const pfbidMatch = url.match(/(pfbid[A-Za-z0-9]+)/);
             if (pfbidMatch) return pfbidMatch[1];
             return null;
+        }
+
+        function detectPlatform(url) {
+            if (!url) return 'facebook_only';
+            return url.includes('instagram.com') ? 'instagram_only' : 'facebook_only';
         }
 
         function generateCampaignName(postCaption, budgetPhp, durationDays, platform) {
@@ -815,11 +970,30 @@
             // Format budget: 1000 → 1k, 500 → 500
             const budgetStr = budgetPhp >= 1000 ? (budgetPhp / 1000) + 'k' : String(budgetPhp);
             const durStr = durationDays === 1 ? '1 day' : durationDays + ' days';
-            const platStr = platform === 'instagram_only' ? 'Instagram'
-                          : platform === 'facebook_only' ? 'Facebook'
-                          : 'Facebook + Instagram';
+            const platStr = platform === 'instagram_only' ? 'Instagram' : 'Facebook';
             return `${desc} - ${budgetStr} ${durStr} - ${platStr}`;
         }
+
+        // Track whether user has manually edited the campaign name
+        let campaignNameManuallyEdited = false;
+
+        document.getElementById('campaign-name').addEventListener('input', () => {
+            campaignNameManuallyEdited = true;
+        });
+
+        function refreshCampaignName() {
+            if (campaignNameManuallyEdited) return; // Don't overwrite manual edits
+            const contentUrl = document.getElementById('content-url').value.trim();
+            const budgetPhp = parseFloat(document.getElementById('budget').value) || 0;
+            const durationDays = parseInt(document.getElementById('duration').value) || 1;
+            const platform = detectPlatform(contentUrl);
+            const caption = resolvedPost?.caption || '';
+            const name = generateCampaignName(caption, budgetPhp, durationDays, platform);
+            document.getElementById('campaign-name').value = name;
+        }
+
+        // Auto-refresh name when duration changes (budget refreshes via selectBudget)
+        document.getElementById('duration').addEventListener('input', refreshCampaignName);
 
         async function launchCampaign() {
             const btn = document.getElementById('launch-btn');
@@ -829,9 +1003,11 @@
             const contentUrl = document.getElementById('content-url').value.trim();
             const budgetPhp = parseFloat(document.getElementById('budget').value);
             const durationDays = parseInt(document.getElementById('duration').value);
-            const platform = document.getElementById('platform').value;
+            const platform = detectPlatform(contentUrl);
             const abTest = document.getElementById('ab-toggle').classList.contains('active');
+            const political = document.getElementById('political-toggle').classList.contains('active');
             const countries = getSelectedCountries();
+            const cities = getSelectedCities();
 
             // Resolve post_id from resolve API or URL extraction
             let postId = document.getElementById('post-id').value || null;
@@ -852,13 +1028,12 @@
             if (resolvedPost) {
                 if (resolvedPost.resolved) {
                     creativeId = resolvedPost.creative_id || null;
+                    objectStoryId = resolvedPost.object_story_id || null;
+                    postId = resolvedPost.post_id || null;
                     if (resolvedPost.use_ig_media) {
                         useIgMedia = true;
                         igMediaId = resolvedPost.ig_media_id;
                         igAccountId = resolvedPost.ig_account_id;
-                    } else {
-                        postId = resolvedPost.post_id;
-                        objectStoryId = resolvedPost.object_story_id;
                     }
                     postCaption = resolvedPost.caption || '';
                 }
@@ -877,15 +1052,9 @@
                 return;
             }
 
-            // Warn if post has no existing creative (never promoted via Business Suite)
-            if (!creativeId && useIgMedia) {
-                showToast('This post needs to be boosted once in Meta Business Suite before launching here.', true);
-                btn.disabled = false;
-                btn.textContent = 'Launch Campaign';
-                return;
-            }
-
-            const campaignName = generateCampaignName(postCaption, budgetPhp, durationDays, platform);
+            // Use the editable campaign name field (user may have customized it)
+            const campaignName = document.getElementById('campaign-name').value.trim()
+                || generateCampaignName(postCaption, budgetPhp, durationDays, platform);
 
             const body = {
                 content_url: contentUrl,
@@ -902,7 +1071,9 @@
                 ig_account_id: igAccountId,
                 platform,
                 ab_test: abTest,
+                political,
                 countries,
+                cities,
             };
 
             try {
@@ -913,11 +1084,31 @@
                 });
                 const data = await res.json();
 
-                if (res.ok) {
-                    showToast(`Campaign created! ${campaignName}`);
+                if (res.ok && data.status === 'created') {
+                    // Double-check for nested errors in ads/adsets
+                    const adErrors = (data.data?.ads || []).filter(a => a.error);
+                    if (adErrors.length > 0) {
+                        const errDetail = adErrors.map(a => typeof a.error === 'object' ? (a.error.message || JSON.stringify(a.error)) : a.error).join('; ');
+                        showToast(`Campaign created but ad failed: ${errDetail}`, true);
+                    } else {
+                        showToast(`Campaign created! ${campaignName}`);
+                    }
                     loadCampaigns();
+                    // Reset for next launch
+                    document.getElementById('campaign-name').value = '';
+                    campaignNameManuallyEdited = false;
                 } else {
-                    const errMsg = typeof data.error === 'object' ? (data.error.message || JSON.stringify(data.error)) : (data.error || data.detail || 'Launch failed');
+                    let errMsg = typeof data.error === 'object' ? (data.error.message || JSON.stringify(data.error)) : (data.error || data.detail || 'Launch failed');
+                    // User-friendly messages for common Meta API errors
+                    if (errMsg.includes('child_attachments has too many elements')) {
+                        errMsg = 'This carousel post has too many slides for Meta Ads (max 10). Try promoting a non-carousel post or one with fewer slides.';
+                    } else if (errMsg.includes('Invalid Tagging') || errMsg.includes('invalid usage of tagging')) {
+                        errMsg = 'This post has tagged users or is a collab post. Meta restricts boosting tagged/collab content — remove tags and try again.';
+                    } else if (errMsg.includes('Session has expired') || errMsg.includes('Error validating access token') || errMsg.includes('Malformed access token') || errMsg.includes('could not be decrypted')) {
+                        errMsg = 'Meta access token is invalid or expired. Use the Token Manager (🔑) to generate a new one and update Vercel.';
+                    } else if (errMsg.includes('ad creation failed:') && errMsg.trim().endsWith(':')) {
+                        errMsg = 'Campaign created but ad creative failed — the post may not be eligible for promotion. Check that the post is published and not restricted.';
+                    }
                     showToast(errMsg, true);
                 }
             } catch(e) {
@@ -1010,67 +1201,112 @@
             }
         }
 
-        // ─── Quick Templates ───
-        const TEMPLATES = {
-            reel_ph:        { budget: 1000, duration: 3, platform: 'instagram_only', countries: ['PH'],             ab: false, label: 'Reel Burst (PH)',       desc: 'Best performer — Instagram Reels to Philippine audience' },
-            reel_diaspora:  { budget: 2000, duration: 3, platform: 'instagram_only', countries: ['US','SA','CA','AE'], ab: false, label: 'Reel Burst (Diaspora)',  desc: 'Instagram Reels to Filipino diaspora markets' },
-            news_push:      { budget: 500,  duration: 1, platform: 'both',           countries: ['PH'],             ab: false, label: 'News Push',              desc: 'Quick 1-day push for trending/breaking news' },
-            scale_winner:   { budget: 5000, duration: 5, platform: 'both',           countries: ['PH'],             ab: true,  label: 'Scale Winner',            desc: '5-day scale with A/B test (Broad vs Core 25-44)' },
-            ab_test:        { budget: 2000, duration: 3, platform: 'both',           countries: ['PH'],             ab: true,  label: 'A/B Test',                desc: '3-day split test for new content formats' },
+        // ─── Budget Selector ───
+        const BUDGET_DEFAULTS = {
+            500: 1, 1000: 1, 2000: 2, 3000: 2, 5000: 2, 10000: 7
         };
 
-        const COUNTRY_NAMES = { PH: 'Philippines', US: 'United States', SA: 'Saudi Arabia', CA: 'Canada', AE: 'UAE' };
-        const PLATFORM_NAMES = { both: 'Facebook + Instagram', facebook_only: 'Facebook Only', instagram_only: 'Instagram Only' };
-
-        function applyTemplate(el, key) {
-            const wasActive = el.classList.contains('active');
-            document.querySelectorAll('.template-btn').forEach(b => b.classList.remove('active'));
-            const detail = document.getElementById('template-detail');
-            const customFields = document.getElementById('custom-fields');
-
-            if (wasActive) {
-                detail.classList.remove('open');
-                customFields.style.display = 'none';
-                return;
-            }
-
+        function selectBudget(el) {
+            document.querySelectorAll('.budget-btn').forEach(b => b.classList.remove('active'));
             el.classList.add('active');
+            const budgetInput = document.getElementById('budget');
+            if (el.dataset.amount === 'custom') {
+                budgetInput.style.display = 'block';
+                budgetInput.value = '';
+                budgetInput.focus();
+            } else {
+                budgetInput.style.display = 'none';
+                const amount = parseInt(el.dataset.amount);
+                budgetInput.value = amount;
+                document.getElementById('duration').value = BUDGET_DEFAULTS[amount] || 2;
+            }
+            refreshCampaignName();
+        }
 
-            // Custom mode — show editable fields, hide detail
-            if (key === 'custom') {
-                detail.classList.remove('open');
-                customFields.style.display = 'block';
+        // ─── Geo Search (PH Cities/Regions) ───
+        let selectedCities = []; // Array of { key, name, region }
+        let geoSearchTimeout = null;
+
+        function updateGeoSearchVisibility() {
+            const phSelected = document.querySelector('#country-selector .country-btn[data-code="PH"].selected');
+            const wrap = document.getElementById('geo-search-wrap');
+            if (phSelected) {
+                wrap.classList.add('open');
+            } else {
+                wrap.classList.remove('open');
+                // Clear selected cities when PH is deselected
+                selectedCities = [];
+                renderGeoChips();
+            }
+        }
+
+        document.getElementById('geo-search').addEventListener('input', function() {
+            const q = this.value.trim();
+            if (q.length < 2) {
+                document.getElementById('geo-results').classList.remove('open');
                 return;
             }
+            clearTimeout(geoSearchTimeout);
+            geoSearchTimeout = setTimeout(() => searchGeo(q), 300);
+        });
 
-            // Preset template — fill form, show detail, hide fields
-            const t = TEMPLATES[key];
-            customFields.style.display = 'none';
+        // Close geo results when clicking outside
+        document.addEventListener('click', function(e) {
+            if (!e.target.closest('#geo-search-wrap')) {
+                document.getElementById('geo-results').classList.remove('open');
+            }
+        });
 
-            document.getElementById('budget').value = t.budget;
-            document.getElementById('duration').value = t.duration;
-            document.getElementById('platform').value = t.platform;
+        async function searchGeo(query) {
+            try {
+                const res = await fetch(`${API}/api/geo-search?q=${encodeURIComponent(query)}`);
+                const data = await res.json();
+                const results = document.getElementById('geo-results');
+                if (!data.data || data.data.length === 0) {
+                    results.innerHTML = '<div class="geo-result-item" style="color:#8a9bab;">No results found</div>';
+                    results.classList.add('open');
+                    return;
+                }
+                // Filter out already-selected cities
+                const selectedKeys = selectedCities.map(c => c.key);
+                const filtered = data.data.filter(r => !selectedKeys.includes(r.key));
+                if (filtered.length === 0) {
+                    results.innerHTML = '<div class="geo-result-item" style="color:#8a9bab;">All matches already added</div>';
+                    results.classList.add('open');
+                    return;
+                }
+                results.innerHTML = filtered.map(r =>
+                    `<div class="geo-result-item" onclick='addGeoCity(${JSON.stringify(r)})'>
+                        ${r.name}<span class="geo-region">${r.region ? ', ' + r.region : ''} · ${r.type}</span>
+                    </div>`
+                ).join('');
+                results.classList.add('open');
+            } catch(e) {
+                console.error('Geo search error:', e);
+            }
+        }
 
-            document.querySelectorAll('#country-selector .country-btn').forEach(b => {
-                b.classList.toggle('selected', t.countries.includes(b.dataset.code));
-            });
+        function addGeoCity(city) {
+            selectedCities.push({ key: city.key, name: city.name, region: city.region || '' });
+            document.getElementById('geo-search').value = '';
+            document.getElementById('geo-results').classList.remove('open');
+            renderGeoChips();
+        }
 
-            const abToggle = document.getElementById('ab-toggle');
-            if (t.ab) abToggle.classList.add('active');
-            else abToggle.classList.remove('active');
+        function removeGeoCity(key) {
+            selectedCities = selectedCities.filter(c => c.key !== key);
+            renderGeoChips();
+        }
 
-            detail.innerHTML = `
-                <div style="font-weight:600;color:#162831;margin-bottom:6px;">${t.label}</div>
-                <div style="color:#52657F;margin-bottom:8px;">${t.desc}</div>
-                <div class="td-row">
-                    <div class="td-item"><div class="td-label">Budget</div><div class="td-val">${t.budget.toLocaleString()} PHP</div></div>
-                    <div class="td-item"><div class="td-label">Duration</div><div class="td-val">${t.duration} day${t.duration > 1 ? 's' : ''}</div></div>
-                    <div class="td-item"><div class="td-label">Platform</div><div class="td-val">${PLATFORM_NAMES[t.platform]}</div></div>
-                    <div class="td-item"><div class="td-label">Countries</div><div class="td-val">${t.countries.map(c => COUNTRY_NAMES[c] || c).join(', ')}</div></div>
-                    <div class="td-item"><div class="td-label">A/B Test</div><div class="td-val">${t.ab ? 'Yes (Broad vs Core 25-44)' : 'No'}</div></div>
-                </div>
-            `;
-            detail.classList.add('open');
+        function renderGeoChips() {
+            const container = document.getElementById('geo-chips');
+            container.innerHTML = selectedCities.map(c =>
+                `<span class="geo-chip">${c.name}${c.region ? ', ' + c.region : ''} <span class="remove" onclick="removeGeoCity('${c.key}')">&times;</span></span>`
+            ).join('');
+        }
+
+        function getSelectedCities() {
+            return selectedCities.map(c => ({ key: c.key, radius: 25, distance_unit: 'kilometer' }));
         }
 
         // ─── Post Resolution ───
@@ -1081,6 +1317,7 @@
             const preview = document.getElementById('post-preview');
             const display = document.getElementById('post-id-display');
             resolvedPost = null;
+            campaignNameManuallyEdited = false; // Reset on new URL paste
 
             if (!url.trim()) {
                 document.getElementById('post-id').value = '';
@@ -1118,18 +1355,26 @@
                     const res = await fetch(`${API}/api/resolve-post?url=${encodeURIComponent(url)}`);
                     const data = await res.json();
                     resolvedPost = data;
+                    refreshCampaignName();
 
                     if (data.resolved) {
                         document.getElementById('post-id').value = data.post_id || data.ig_media_id || '';
                         const thumbHtml = data.thumbnail ? `<img class="preview-thumb" src="${data.thumbnail}" alt="" />` : '';
                         const idLabel = data.post_id ? `Post ID: ${data.post_id}` : data.ig_media_id ? `IG Media: ${data.ig_media_id}` : '';
                         const sourceLabel = data.source ? ` (${data.source})` : '';
+                        // Build warnings HTML from warnings array or single warning field
+                        const allWarnings = data.warnings || (data.warning ? [data.warning] : []);
+                        const warningsHtml = allWarnings.map(w =>
+                            `<div class="preview-id" style="color:#e74c3c;margin-top:4px;">⚠ ${w}</div>`
+                        ).join('');
+                        const mediaInfo = data.media_type === 'CAROUSEL_ALBUM' && data.children_count ? ` · ${data.children_count} slides` : '';
                         preview.innerHTML = `
                             ${thumbHtml}
                             <div class="preview-body">
-                                <span class="preview-platform ${platClass}">${platLabel} · ${typeLabel}</span>${typeBadge}
+                                <span class="preview-platform ${platClass}">${platLabel} · ${typeLabel}${mediaInfo}</span>${typeBadge}
                                 <div class="preview-caption">${data.caption || url}</div>
                                 <div class="preview-id" style="color:#0a8f6f;">✓ Resolved — ${idLabel}${sourceLabel}</div>
+                                ${warningsHtml}
                             </div>
                         `;
                     } else {
@@ -1165,6 +1410,77 @@
         // Load on page load only (no auto-refresh to avoid Meta API rate limits)
         loadCampaigns();
         loadStats();
+    </script>
+    </div><!-- /app-wrapper -->
+
+    <!-- Token Exchange Modal -->
+    <div id="token-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:9999;align-items:center;justify-content:center;">
+      <div style="background:#1e293b;border-radius:12px;padding:28px;max-width:520px;width:90%;color:#e2e8f0;position:relative;">
+        <button onclick="document.getElementById('token-modal').style.display='none'" style="position:absolute;top:12px;right:16px;background:none;border:none;color:#64748b;font-size:22px;cursor:pointer;">&times;</button>
+        <h3 style="font-family:'Bebas Neue',sans-serif;font-size:22px;letter-spacing:1.5px;color:#f8fafc;margin-bottom:4px;">&#128273; Token Manager</h3>
+        <p style="font-size:12px;color:#64748b;margin-bottom:16px;">Convert a short-lived Graph API token to a 60-day long-lived token</p>
+
+        <label style="font-size:12px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:1px;">Short-lived Token (from Graph API Explorer)</label>
+        <textarea id="token-input" rows="3" style="width:100%;background:#0f172a;border:1px solid #334155;border-radius:6px;color:#e2e8f0;padding:10px;font-size:12px;font-family:monospace;resize:vertical;margin:6px 0 12px;" placeholder="Paste your token from developers.facebook.com/tools/explorer"></textarea>
+
+        <button id="token-exchange-btn" onclick="exchangeToken()" style="width:100%;padding:12px;background:#FB041C;color:#fff;border:none;border-radius:6px;font-weight:700;font-size:14px;cursor:pointer;">Exchange for 60-Day Token</button>
+
+        <div id="token-result" style="display:none;margin-top:16px;padding:14px;background:#0f172a;border-radius:8px;border:1px solid #334155;">
+          <div style="font-size:11px;font-weight:600;color:#22c55e;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">&#10003; Long-Lived Token Generated</div>
+          <textarea id="token-output" rows="3" readonly style="width:100%;background:transparent;border:none;color:#60a5fa;font-size:11px;font-family:monospace;resize:none;outline:none;"></textarea>
+          <div id="token-expiry" style="font-size:12px;color:#94a3b8;margin:8px 0;"></div>
+          <button onclick="copyToken()" style="width:100%;padding:10px;background:#334155;color:#fff;border:none;border-radius:6px;font-weight:600;font-size:13px;cursor:pointer;">Copy Token</button>
+          <p style="font-size:11px;color:#64748b;margin-top:10px;line-height:1.5;">Paste this token in <strong>Vercel</strong> &rarr; Settings &rarr; Environment Variables &rarr; <code style="color:#94a3b8;">META_ACCESS_TOKEN</code> and redeploy.</p>
+        </div>
+
+        <div id="token-error" style="display:none;margin-top:12px;padding:10px;background:#450a0a;border:1px solid #7f1d1d;border-radius:6px;color:#fca5a5;font-size:12px;"></div>
+      </div>
+    </div>
+
+    <script>
+    async function exchangeToken() {
+        const btn = document.getElementById('token-exchange-btn');
+        const input = document.getElementById('token-input').value.trim();
+        const resultDiv = document.getElementById('token-result');
+        const errorDiv = document.getElementById('token-error');
+        resultDiv.style.display = 'none';
+        errorDiv.style.display = 'none';
+
+        if (!input) { errorDiv.textContent = 'Paste a token first'; errorDiv.style.display = 'block'; return; }
+
+        btn.disabled = true;
+        btn.textContent = 'Exchanging...';
+
+        try {
+            const res = await fetch(`${API}/api/token-exchange`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ short_token: input }),
+            });
+            const data = await res.json();
+
+            if (data.error) {
+                errorDiv.textContent = data.error;
+                errorDiv.style.display = 'block';
+            } else {
+                document.getElementById('token-output').value = data.access_token;
+                document.getElementById('token-expiry').textContent = `Expires: ${new Date(data.expires_at).toLocaleDateString()} (${data.expires_in_days} days)`;
+                resultDiv.style.display = 'block';
+            }
+        } catch (e) {
+            errorDiv.textContent = 'Exchange failed: ' + e.message;
+            errorDiv.style.display = 'block';
+        }
+        btn.disabled = false;
+        btn.textContent = 'Exchange for 60-Day Token';
+    }
+
+    function copyToken() {
+        const output = document.getElementById('token-output');
+        output.select();
+        navigator.clipboard.writeText(output.value);
+        showToast('Token copied to clipboard');
+    }
     </script>
 </body>
 </html>

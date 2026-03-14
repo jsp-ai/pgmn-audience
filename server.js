@@ -64,6 +64,74 @@ function metaPost(endpoint, body = {}) {
   });
 }
 
+const PAGE_ID = (env.META_PAGE_ID || '394530007066390').trim();
+const PAGE_ACCESS_TOKEN = env.META_PAGE_ACCESS_TOKEN || '';
+const IG_ACCOUNT_ID = (env.META_IG_ACCOUNT_ID || '').trim();
+
+// Query with page access token (for reading post details)
+function pageGet(endpoint, params = {}) {
+  const token = PAGE_ACCESS_TOKEN || ACCESS_TOKEN;
+  return new Promise((resolve) => {
+    params.access_token = token;
+    const qs = new URLSearchParams(params).toString();
+    const reqUrl = `${BASE}/${endpoint}?${qs}`;
+    https.get(reqUrl, res => {
+      let data = '';
+      res.on('data', chunk => data += chunk);
+      res.on('end', () => {
+        try { resolve(JSON.parse(data)); }
+        catch (e) { resolve({ error: 'Invalid JSON' }); }
+      });
+    }).on('error', () => resolve({ error: 'Network error' }));
+  });
+}
+
+// Get the IG actor ID for ad creatives — returns { id, source } for debugging
+let igActorCache = { id: null, source: null, ts: 0 };
+async function getIgActorId() {
+  if (igActorCache.id && Date.now() - igActorCache.ts < 300000) {
+    return { id: igActorCache.id, source: igActorCache.source };
+  }
+
+  // 0. Environment variable
+  if (IG_ACCOUNT_ID) {
+    igActorCache = { id: IG_ACCOUNT_ID, source: 'env_var', ts: Date.now() };
+    return { id: IG_ACCOUNT_ID, source: 'env_var' };
+  }
+
+  // 1. Try Page-level instagram_accounts with Page Access Token
+  try {
+    const pageIg = await pageGet(`${PAGE_ID}/instagram_accounts`, { fields: 'id,username' });
+    if (pageIg.data && pageIg.data.length > 0) {
+      const id = pageIg.data[0].id;
+      igActorCache = { id, source: `page_ig(${pageIg.data[0].username || 'unknown'})`, ts: Date.now() };
+      return { id, source: igActorCache.source };
+    }
+  } catch (e) { /* continue */ }
+
+  // 2. Try page-backed IG accounts
+  try {
+    const backed = await pageGet(`${PAGE_ID}/page_backed_instagram_accounts`);
+    if (backed.data && backed.data.length > 0) {
+      const id = backed.data[0].id;
+      igActorCache = { id, source: 'page_backed', ts: Date.now() };
+      return { id, source: 'page_backed' };
+    }
+  } catch (e) { /* continue */ }
+
+  // 3. Fallback: ad account level
+  try {
+    const adIg = await metaGet(`${AD_ACCOUNT_ID}/instagram_accounts`, { fields: 'id,username' });
+    if (adIg.data && adIg.data.length > 0) {
+      const id = adIg.data[0].id;
+      igActorCache = { id, source: `ad_account(${adIg.data[0].username || 'unknown'})`, ts: Date.now() };
+      return { id, source: igActorCache.source };
+    }
+  } catch (e) { /* continue */ }
+
+  return null;
+}
+
 // ─── Cache (avoid Meta API rate limits) ───
 const cache = {};
 const CACHE_TTL = 120000; // 2 minutes
@@ -270,6 +338,50 @@ async function getIgAccountId() {
   return null;
 }
 
+function detectMentions(caption) {
+  if (!caption) return [];
+  return caption.match(/@[\w.]+/g) || [];
+}
+
+// Resolve Facebook URL to numeric post ID
+// Handles /share/p/ (redirect) and pfbid (HTML scrape for og:url) formats
+function resolveFbPostId(inputUrl) {
+  return new Promise((resolve) => {
+    try {
+      const parsed = new URL(inputUrl);
+      const isShareLink = /\/share\/p\//.test(parsed.pathname);
+      const req = https.request({
+        hostname: parsed.hostname,
+        path: parsed.pathname + parsed.search,
+        method: isShareLink ? 'HEAD' : 'GET',
+        headers: { 'User-Agent': 'facebookexternalhit/1.1' },
+      }, (res) => {
+        if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+          const storyMatch = res.headers.location.match(/story_fbid=(\d+)/);
+          if (storyMatch) { res.resume(); resolve(storyMatch[1]); return; }
+        }
+        if (isShareLink) { res.resume(); resolve(null); return; }
+        let data = '';
+        let found = false;
+        res.on('data', chunk => {
+          if (found) return;
+          data += chunk;
+          const canonicalMatch = data.match(/\/posts\/[^"]*\/(\d{10,})\//);
+          if (canonicalMatch) { found = true; res.destroy(); resolve(canonicalMatch[1]); return; }
+          const storyMatch = data.match(/story_fbid=(\d+)/);
+          if (storyMatch) { found = true; res.destroy(); resolve(storyMatch[1]); return; }
+          if (data.length > 20000) { res.destroy(); resolve(null); }
+        });
+        res.on('end', () => { if (!found) resolve(null); });
+        res.on('error', () => { if (!found) resolve(null); });
+      });
+      req.on('error', () => resolve(null));
+      req.setTimeout(6000, () => { req.destroy(); resolve(null); });
+      req.end();
+    } catch (e) { resolve(null); }
+  });
+}
+
 async function resolvePost(postUrl) {
   const isReel = /\/(reel|reels)\//i.test(postUrl) || /\/videos\//i.test(postUrl);
   const isInstagram = postUrl.includes('instagram.com');
@@ -277,14 +389,24 @@ async function resolvePost(postUrl) {
   const content_type = isReel ? 'reel' : 'post';
 
   let urlId = null;
-  const igMatch = postUrl.match(/instagram\.com\/(?:p|reel|reels)\/([A-Za-z0-9_-]+)/);
+  const igMatch = postUrl.match(/instagram\.com\/(?:[\w.]+\/)?(?:p|reel|reels)\/([A-Za-z0-9_-]+)/);
   if (igMatch) urlId = igMatch[1];
   const fbPostMatch = postUrl.match(/\/posts\/(\d+)/);
   if (fbPostMatch) urlId = fbPostMatch[1];
   const fbVideoMatch = postUrl.match(/\/videos\/(\d+)/);
   if (fbVideoMatch) urlId = fbVideoMatch[1];
+  const fbReelMatch = postUrl.match(/facebook\.com\/(?:[\w.]+\/)?reel\/(\d+)/);
+  if (fbReelMatch) urlId = fbReelMatch[1];
+  const storyFbidMatch = postUrl.match(/story_fbid=(\d+)/);
+  if (storyFbidMatch) urlId = storyFbidMatch[1];
   const pfbidMatch = postUrl.match(/(pfbid[A-Za-z0-9]+)/);
   if (pfbidMatch) urlId = pfbidMatch[1];
+
+  // Handle /share/p/ and pfbid URLs by resolving to numeric post ID
+  if (!isInstagram && (!urlId || /^pfbid/.test(urlId))) {
+    const numericId = await resolveFbPostId(postUrl);
+    if (numericId) urlId = numericId;
+  }
 
   // ─── Step 1: Check ad creatives (includes source_instagram_media_id) ───
   const creatives = await metaGet(`${AD_ACCOUNT_ID}/adcreatives`, {
@@ -299,10 +421,8 @@ async function resolvePost(postUrl) {
   }
 
   if (matched) {
-    if (matched.object_story_id) {
-      const postId = matched.object_story_id.includes('_') ? matched.object_story_id.split('_')[1] : matched.object_story_id;
-      return { resolved: true, object_story_id: matched.object_story_id, post_id: postId, creative_id: matched.id, caption: matched.body || matched.title || matched.name || '', thumbnail: matched.thumbnail_url || null, platform, content_type, source: 'ad_creatives' };
-    } else if (matched.source_instagram_media_id) {
+    // Check source_instagram_media_id FIRST (IG-native creatives)
+    if (matched.source_instagram_media_id) {
       const igAccountId = await getIgAccountId();
       return {
         resolved: true, ig_media_id: matched.source_instagram_media_id, ig_account_id: igAccountId,
@@ -310,33 +430,111 @@ async function resolvePost(postUrl) {
         caption: matched.body || matched.title || matched.name || '', thumbnail: matched.thumbnail_url || null,
         platform, content_type, use_ig_media: true, source: 'ad_creatives_ig',
       };
+    } else if (matched.object_story_id && !isInstagram) {
+      // FB creative — only use object_story_id for Facebook URLs
+      const postId = matched.object_story_id.includes('_') ? matched.object_story_id.split('_')[1] : matched.object_story_id;
+      return { resolved: true, object_story_id: matched.object_story_id, post_id: postId, creative_id: matched.id, caption: matched.body || matched.title || matched.name || '', thumbnail: matched.thumbnail_url || null, platform, content_type, source: 'ad_creatives' };
     }
+    // If IG URL matched a creative with only object_story_id (old format),
+    // skip it and fall through to Step 3 (IG Graph API) for proper handling
   }
 
-  // ─── Step 2: IG Graph API media lookup (requires instagram_basic) ───
+  // ─── Step 2: For Facebook posts, construct object_story_id from extracted ID ───
+  if (!isInstagram && urlId && /^\d+$/.test(urlId)) {
+    const objectStoryId = `${PAGE_ID}_${urlId}`;
+    const result = {
+      resolved: true,
+      object_story_id: objectStoryId,
+      post_id: urlId,
+      platform, content_type,
+      source: 'fb_post_lookup',
+      warnings: [],
+    };
+    // Try to query the actual post for tags and caption
+    try {
+      const post = await pageGet(objectStoryId, {
+        fields: 'message,message_tags,to,story_tags'
+      });
+      if (!post.error) {
+        if (post.message) result.caption = post.message;
+        const hasTags = (post.message_tags && post.message_tags.length > 0)
+          || (post.to && post.to.data && post.to.data.length > 0)
+          || (post.story_tags && Object.keys(post.story_tags).length > 0);
+        if (hasTags) {
+          result.warnings.push('This post has tagged users/pages. Meta may reject boosting tagged or collab posts — remove tags before launching.');
+        }
+        const mentions = detectMentions(post.message);
+        if (!hasTags && mentions.length > 0) {
+          result.warnings.push(`Post mentions ${mentions.join(', ')} — tagged or collab content may be restricted from boosting.`);
+        }
+      }
+    } catch (e) { /* post query failed */ }
+    return result;
+  }
+
+  // ─── Step 3: IG Graph API media lookup (requires instagram_basic) ───
   if (isInstagram && urlId) {
     try {
       const igAccountId = await getIgAccountId();
       if (igAccountId) {
-        const igMedia = await metaGet(`${igAccountId}/media`, {
-          fields: 'id,ig_id,shortcode,permalink,caption,media_type,thumbnail_url,media_url',
-          limit: '50'
-        });
-        if (!igMedia.error && igMedia.data) {
-          let igMatched = null;
+        // Paginate through media to find the post (up to 3 pages / ~150 posts)
+        let igMatched = null;
+        let nextUrl = null;
+        const mediaFields = 'id,ig_id,shortcode,permalink,caption,media_type,thumbnail_url,media_url';
+
+        for (let page = 0; page < 3; page++) {
+          let igMedia;
+          if (page === 0) {
+            igMedia = await metaGet(`${igAccountId}/media`, { fields: mediaFields, limit: '50' });
+          } else if (nextUrl) {
+            igMedia = await new Promise((resolve) => {
+              https.get(nextUrl, r => {
+                let d = '';
+                r.on('data', c => d += c);
+                r.on('end', () => { try { resolve(JSON.parse(d)); } catch(e) { resolve({}); } });
+              }).on('error', () => resolve({}));
+            });
+          } else { break; }
+
+          if (igMedia.error || !igMedia.data) break;
           for (const m of igMedia.data) {
             if (m.shortcode === urlId || (m.permalink && m.permalink.includes(urlId))) { igMatched = m; break; }
           }
-          if (igMatched) {
-            return {
+          if (igMatched) break;
+          nextUrl = igMedia.paging && igMedia.paging.next ? igMedia.paging.next : null;
+          if (!nextUrl) break;
+        }
+
+        if (igMatched) {
+            // For carousel posts, get children count to check for >10 slide limit
+            let childrenCount = 0;
+            if (igMatched.media_type === 'CAROUSEL_ALBUM') {
+              try {
+                const children = await metaGet(`${igMatched.id}/children`, { fields: 'id', limit: '50' });
+                if (children.data) childrenCount = children.data.length;
+              } catch (e) { /* ignore */ }
+            }
+
+            const warnings = [];
+            if (childrenCount > 10) {
+              warnings.push(`Carousel has ${childrenCount} slides — Meta Ads max is 10. This post cannot be boosted.`);
+            }
+            const mentions = detectMentions(igMatched.caption);
+            if (mentions.length > 0) {
+              warnings.push(`Post mentions ${mentions.join(', ')} — tagged or collab posts may be restricted from boosting.`);
+            }
+
+            const result = {
               resolved: true, ig_media_id: igMatched.id, ig_id: igMatched.ig_id || igMatched.id,
               ig_account_id: igAccountId, caption: igMatched.caption || '',
               thumbnail: igMatched.thumbnail_url || igMatched.media_url || null,
               media_type: igMatched.media_type, platform, content_type,
-              use_ig_media: true, source: 'ig_media',
+              use_ig_media: true, source: 'ig_media', warnings,
             };
+            if (childrenCount > 0) result.children_count = childrenCount;
+            if (childrenCount > 10) result.warning = warnings[0];
+            return result;
           }
-        }
       }
     } catch (e) { /* IG lookup failed */ }
   }
@@ -347,7 +545,7 @@ async function resolvePost(postUrl) {
 async function launchCampaign(body) {
   const {
     budget_php, duration_days, page_id, post_id, campaign_name,
-    platform, ab_test, countries, content_type,
+    platform, ab_test, political, countries, cities, content_type,
     object_story_id, creative_id,
     use_ig_media, ig_media_id, ig_account_id,
   } = body;
@@ -359,11 +557,16 @@ async function launchCampaign(body) {
   const optimizationGoal = isReel ? 'THRUPLAY' : 'POST_ENGAGEMENT';
 
   // 1. Create campaign
-  const campaign = await metaPost(`${AD_ACCOUNT_ID}/campaigns`, {
-    name, objective, status: 'PAUSED',
-    special_ad_categories: '[]',
+  const campaignParams = {
+    name, objective, status: 'ACTIVE',
+    special_ad_categories: political ? '["ISSUES_ELECTIONS_POLITICS"]' : '[]',
     is_adset_budget_sharing_enabled: 'false'
-  });
+  };
+  if (political) {
+    const targetC = countries && countries.length ? countries : ['PH'];
+    campaignParams.special_ad_category_country = JSON.stringify(targetC);
+  }
+  const campaign = await metaPost(`${AD_ACCOUNT_ID}/campaigns`, campaignParams);
   if (campaign.error) return campaign;
 
   const now = new Date();
@@ -371,7 +574,18 @@ async function launchCampaign(body) {
   const fmt = d => d.toISOString().replace(/\.\d+Z$/, '+0800');
 
   const targetCountries = countries && countries.length ? countries : ['PH'];
-  const targeting = { geo_locations: { countries: targetCountries }, age_min: 18, age_max: 65 };
+  // Build geo_locations — if PH cities are specified, use cities for PH instead of country
+  const geoLocations = {};
+  if (cities && cities.length > 0) {
+    // Use city-level targeting for PH (cannot mix countries + cities in same country)
+    geoLocations.cities = cities;
+    // Add non-PH countries if any
+    const otherCountries = targetCountries.filter(c => c !== 'PH');
+    if (otherCountries.length > 0) geoLocations.countries = otherCountries;
+  } else {
+    geoLocations.countries = targetCountries;
+  }
+  const targeting = { geo_locations: geoLocations, age_min: 18, age_max: 65 };
   if (platform === 'facebook_only') targeting.publisher_platforms = ['facebook'];
   else if (platform === 'instagram_only') targeting.publisher_platforms = ['instagram'];
   else targeting.publisher_platforms = ['facebook', 'instagram'];
@@ -379,42 +593,66 @@ async function launchCampaign(body) {
   const results = { campaign_id: campaign.id, adsets: [], ads: [], objective, optimization_goal: optimizationGoal };
   const storyId = object_story_id || (page_id && post_id ? `${page_id}_${post_id}` : null);
 
+  // Pre-fetch IG actor if needed (so we fail fast before creating adsets)
+  let igActorId = null;
+  let igActorSource = null;
+  if (use_ig_media && ig_media_id && !creative_id) {
+    const igResult = await getIgActorId();
+    if (!igResult) {
+      return {
+        error: 'No Instagram account found for ads. Connect your IG account to your Page in Meta Business Settings > Instagram Accounts.',
+        campaign_id: campaign.id,
+      };
+    }
+    igActorId = igResult.id;
+    igActorSource = igResult.source;
+  }
+
   const createAdSet = async (adsetName, budgetPhp, extraTargeting = {}) => {
     const t = { ...targeting, ...extraTargeting };
-    const adset = await metaPost(`${AD_ACCOUNT_ID}/adsets`, {
+    const adsetParams = {
       campaign_id: campaign.id, name: adsetName,
       lifetime_budget: String(Math.round(budgetPhp * 100)),
       bid_strategy: 'LOWEST_COST_WITHOUT_CAP',
       optimization_goal: optimizationGoal, billing_event: 'IMPRESSIONS',
       destination_type: 'ON_POST',
       start_time: fmt(now), end_time: fmt(end),
-      targeting: JSON.stringify(t), status: 'PAUSED'
-    });
+      targeting: JSON.stringify(t), status: 'ACTIVE'
+    };
+    const adset = await metaPost(`${AD_ACCOUNT_ID}/adsets`, adsetParams);
     if (adset.error) { results.adsets.push({ error: adset.error }); return adset; }
     results.adsets.push(adset);
 
     // ─── Determine creative to use ───
-    let creativeIdToUse = creative_id; // Reuse existing creative from resolve-post
+    let creativeIdToUse = creative_id;
 
     if (!creativeIdToUse) {
-      // No existing creative — create a new one
       let creative;
-      if (use_ig_media && ig_media_id && ig_account_id) {
-        creative = await metaPost(`${AD_ACCOUNT_ID}/adcreatives`, {
-          name: `${adsetName} - Creative`,
-          instagram_user_id: ig_account_id,
-          source_instagram_media_id: ig_media_id,
-        });
+      const creativeParams = { name: `${adsetName} - Creative` };
+      if (political) creativeParams.authorization_category = 'POLITICAL';
+
+      if (use_ig_media && ig_media_id && igActorId) {
+        // instagram_actor_id deprecated in v22.0; use instagram_user_id + object_id
+        creativeParams.instagram_user_id = igActorId;
+        creativeParams.source_instagram_media_id = ig_media_id;
+        creativeParams.object_id = PAGE_ID;
+        creative = await metaPost(`${AD_ACCOUNT_ID}/adcreatives`, creativeParams);
       } else if (storyId) {
-        creative = await metaPost(`${AD_ACCOUNT_ID}/adcreatives`, {
-          name: `${adsetName} - Creative`, object_story_id: storyId
-        });
+        creativeParams.object_story_id = storyId;
+        creative = await metaPost(`${AD_ACCOUNT_ID}/adcreatives`, creativeParams);
       }
       if (!creative) {
         results.ads.push({ error: 'No creative_id, ig_media, or object_story_id provided' });
         return adset;
       }
       if (creative.error) {
+        // Include debug info
+        creative.error._debug = {
+          ig_user_id_used: creativeParams.instagram_user_id || null,
+          ig_actor_source: igActorSource || 'n/a',
+          ig_media_id_used: creativeParams.source_instagram_media_id || null,
+          object_story_id_used: creativeParams.object_story_id || null,
+        };
         results.ads.push({ error: creative.error });
         return adset;
       }
@@ -424,7 +662,7 @@ async function launchCampaign(body) {
     // 3. Create ad using the creative
     const ad = await metaPost(`${AD_ACCOUNT_ID}/ads`, {
       name: `${adsetName} - Ad`, adset_id: adset.id,
-      creative: JSON.stringify({ creative_id: creativeIdToUse }), status: 'PAUSED'
+      creative: JSON.stringify({ creative_id: creativeIdToUse }), status: 'ACTIVE'
     });
     if (ad.error) { results.ads.push({ error: ad.error }); } else { results.ads.push(ad); }
     return adset;
@@ -437,10 +675,34 @@ async function launchCampaign(body) {
     await createAdSet(`${name} - Main`, budget_php);
   }
 
+  // Check for failures
+  const adErrors = results.ads.filter(a => a.error);
+  const adsetErrors = results.adsets.filter(a => a.error);
+
+  const describeError = (e) => {
+    if (typeof e === 'object') {
+      const parts = [e.message || 'Unknown error'];
+      if (e.error_user_msg) parts.push(e.error_user_msg);
+      else if (e.error_user_title) parts.push(e.error_user_title);
+      if (e.error_subcode) parts.push(`(subcode: ${e.error_subcode})`);
+      if (e._debug) parts.push(`[ig_user: ${e._debug.ig_user_id_used} (${e._debug.ig_actor_source}), media: ${e._debug.ig_media_id_used}]`);
+      return parts.join(' — ');
+    }
+    return String(e);
+  };
+
+  if (adErrors.length > 0 || results.ads.length === 0) {
+    const errorDetails = adErrors.map(a => describeError(a.error));
+    return { error: `Campaign created but ad creation failed: ${errorDetails.join('; ')}`, data: results };
+  }
+
+  if (adsetErrors.length > 0) {
+    const errorDetails = adsetErrors.map(a => describeError(a.error));
+    return { error: `Campaign created but ad set creation failed: ${errorDetails.join('; ')}`, data: results };
+  }
+
   return results;
 }
-
-const PAGE_ID = env.META_PAGE_ID || '394530007066390';
 
 async function getPagePosts() {
   const cached = getCached('posts');
@@ -550,7 +812,28 @@ const server = http.createServer(async (req, res) => {
     }
     if (pathname === '/api/launch' && req.method === 'POST') {
       const body = await parseBody(req);
-      return sendJSON(res, { status: 'created', data: await launchCampaign(body) });
+      const result = await launchCampaign(body);
+      if (result.error) {
+        return sendJSON(res, { status: 'partial_failure', error: result.error, data: result.data }, 400);
+      }
+      return sendJSON(res, { status: 'created', data: result });
+    }
+    if (pathname === '/api/geo-search' && req.method === 'GET') {
+      const q = parsed.query?.q || '';
+      if (q.length < 2) return sendJSON(res, { error: 'Query must be at least 2 characters' }, 400);
+      const result = await metaGet('search', {
+        type: 'adgeolocation',
+        location_types: '["city","region"]',
+        q,
+        country_code: 'PH',
+        limit: '10',
+      });
+      if (result.error) return sendJSON(res, { error: result.error }, 400);
+      const data = (result.data || []).map(r => ({
+        key: r.key, name: r.name, type: r.type,
+        region: r.region || '', country_code: r.country_code,
+      }));
+      return sendJSON(res, { data });
     }
     if (pathname === '/api/resolve-post' && req.method === 'GET') {
       const postUrl = parsed.query?.url;
