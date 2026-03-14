@@ -119,6 +119,8 @@ module.exports = async function handler(req, res) {
     if (fbReelMatch) urlId = fbReelMatch[1];
     const storyFbidMatch = url.match(/story_fbid=(\d+)/);
     if (storyFbidMatch) urlId = storyFbidMatch[1];
+    const fbidMatch = url.match(/[?&]fbid=(\d+)/);
+    if (fbidMatch) urlId = fbidMatch[1];
     const pfbidMatch = url.match(/(pfbid[A-Za-z0-9]+)/);
     if (pfbidMatch) urlId = pfbidMatch[1];
 
