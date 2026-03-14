@@ -399,6 +399,8 @@ async function resolvePost(postUrl) {
   if (fbReelMatch) urlId = fbReelMatch[1];
   const storyFbidMatch = postUrl.match(/story_fbid=(\d+)/);
   if (storyFbidMatch) urlId = storyFbidMatch[1];
+  const fbidMatch = postUrl.match(/[?&]fbid=(\d+)/);
+  if (fbidMatch) urlId = fbidMatch[1];
   const pfbidMatch = postUrl.match(/(pfbid[A-Za-z0-9]+)/);
   if (pfbidMatch) urlId = pfbidMatch[1];
 
