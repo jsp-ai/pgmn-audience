@@ -455,10 +455,11 @@ async function resolvePost(postUrl) {
     // Try to query the actual post for tags and caption
     try {
       const post = await pageGet(objectStoryId, {
-        fields: 'message,message_tags,to,story_tags'
+        fields: 'message,message_tags,to,story_tags,full_picture'
       });
       if (!post.error) {
         if (post.message) result.caption = post.message;
+        if (post.full_picture) result.thumbnail = post.full_picture;
         const hasTags = (post.message_tags && post.message_tags.length > 0)
           || (post.to && post.to.data && post.to.data.length > 0)
           || (post.story_tags && Object.keys(post.story_tags).length > 0);

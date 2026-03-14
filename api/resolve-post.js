@@ -195,10 +195,11 @@ module.exports = async function handler(req, res) {
       // Try to query the actual post for tags, caption, and type info
       try {
         const post = await pageGet(objectStoryId, {
-          fields: 'message,message_tags,to,story_tags,is_eligible_for_promotion'
+          fields: 'message,message_tags,to,story_tags,is_eligible_for_promotion,full_picture'
         });
         if (!post.error) {
           if (post.message) result.caption = post.message;
+          if (post.full_picture) result.thumbnail = post.full_picture;
           // Detect tagged users/pages
           const hasTags = (post.message_tags && post.message_tags.length > 0)
             || (post.to && post.to.data && post.to.data.length > 0)
