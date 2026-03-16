@@ -1106,7 +1106,7 @@
                         errMsg = 'This post has tagged users or is a collab post. Meta restricts boosting tagged/collab content — remove tags and try again.';
                     } else if (errMsg.includes('Session has expired') || errMsg.includes('Error validating access token') || errMsg.includes('Malformed access token') || errMsg.includes('could not be decrypted')) {
                         errMsg = 'Meta access token is invalid or expired. Use the Token Manager (🔑) to generate a new one and update Vercel.';
-                    } else if (errMsg.includes("Page Post Can't Be Used") || errMsg.includes("can't be promoted")) {
+                    } else if (errMsg.includes("Page Post Can") && errMsg.includes("t Be Used") || errMsg.includes("promoted in an ad")) {
                         errMsg = "This post can't be promoted. It may contain copyrighted music, AR effects, or other restricted content. Try a different post, or boost it directly from Facebook.";
                     } else if (errMsg.includes('ad creation failed:') && errMsg.trim().endsWith(':')) {
                         errMsg = 'Campaign created but ad creative failed — the post may not be eligible for promotion. Check that the post is published and not restricted.';
