@@ -383,10 +383,10 @@ function resolveFbPostId(inputUrl) {
 }
 
 async function resolvePost(postUrl) {
-  const isReel = /\/(reel|reels)\//i.test(postUrl) || /\/videos\//i.test(postUrl);
+  const isReelUrl = /\/(reel|reels)\//i.test(postUrl) || /\/videos\//i.test(postUrl);
   const isInstagram = postUrl.includes('instagram.com');
   const platform = isInstagram ? 'instagram' : 'facebook';
-  const content_type = isReel ? 'reel' : 'post';
+  let content_type = isReelUrl ? 'reel' : 'post';
 
   let urlId = null;
   const igMatch = postUrl.match(/instagram\.com\/(?:[\w.]+\/)?(?:p|reel|reels)\/([A-Za-z0-9_-]+)/);
@@ -455,11 +455,16 @@ async function resolvePost(postUrl) {
     // Try to query the actual post for tags and caption
     try {
       const post = await pageGet(objectStoryId, {
-        fields: 'message,message_tags,to,story_tags,full_picture'
+        fields: 'message,message_tags,to,story_tags,full_picture,type'
       });
       if (!post.error) {
         if (post.message) result.caption = post.message;
         if (post.full_picture) result.thumbnail = post.full_picture;
+        // Detect video posts and set content_type to reel for ThruPlay optimization
+        if (post.type === 'video' || post.type === 'added_video') {
+          content_type = 'reel';
+          result.content_type = content_type;
+        }
         const hasTags = (post.message_tags && post.message_tags.length > 0)
           || (post.to && post.to.data && post.to.data.length > 0)
           || (post.story_tags && Object.keys(post.story_tags).length > 0);
@@ -527,6 +532,10 @@ async function resolvePost(postUrl) {
               warnings.push(`Post mentions ${mentions.join(', ')} — tagged or collab posts may be restricted from boosting.`);
             }
 
+            // If IG media is VIDEO, override content_type to 'reel' for ThruPlay optimization
+            if (igMatched.media_type === 'VIDEO') {
+              content_type = 'reel';
+            }
             const result = {
               resolved: true, ig_media_id: igMatched.id, ig_id: igMatched.ig_id || igMatched.id,
               ig_account_id: igAccountId, caption: igMatched.caption || '',

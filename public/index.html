@@ -1357,6 +1357,13 @@
 
                     if (data.resolved) {
                         document.getElementById('post-id').value = data.post_id || data.ig_media_id || '';
+                        // Update content type from server response (detects video/reel even for /p/ URLs)
+                        if (data.content_type) contentType = data.content_type;
+                        const resolvedIsReel = data.content_type === 'reel' || data.media_type === 'VIDEO';
+                        const resolvedTypeLabel = resolvedIsReel ? 'REEL' : (data.media_type === 'CAROUSEL_ALBUM' ? 'CAROUSEL' : 'POST');
+                        const resolvedTypeBadge = resolvedIsReel
+                            ? '<span style="background:#6c5ce7;color:#fff;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;margin-left:6px;">VIDEO VIEWS · THRUPLAY</span>'
+                            : '<span style="background:#00b894;color:#fff;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;margin-left:6px;">POST ENGAGEMENT</span>';
                         const thumbHtml = data.thumbnail ? `<img class="preview-thumb" src="${data.thumbnail}" alt="" />` : '';
                         const idLabel = data.post_id ? `Post ID: ${data.post_id}` : data.ig_media_id ? `IG Media: ${data.ig_media_id}` : '';
                         const sourceLabel = data.source ? ` (${data.source})` : '';
@@ -1369,7 +1376,7 @@
                         preview.innerHTML = `
                             ${thumbHtml}
                             <div class="preview-body">
-                                <span class="preview-platform ${platClass}">${platLabel} · ${typeLabel}${mediaInfo}</span>${typeBadge}
+                                <span class="preview-platform ${platClass}">${platLabel} · ${resolvedTypeLabel}${mediaInfo}</span>${resolvedTypeBadge}
                                 <div class="preview-caption">${data.caption || url}</div>
                                 <div class="preview-id" style="color:#0a8f6f;">✓ Resolved — ${idLabel}${sourceLabel}</div>
                                 ${warningsHtml}
