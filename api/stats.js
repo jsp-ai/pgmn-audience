@@ -23,12 +23,13 @@ module.exports = async function handler(req, res) {
     const campaigns = active.data || [];
     const campIds = campaigns.map(c => c.id);
 
-    // Get adset budgets and insights to filter out completed campaigns
+    // Get adset budgets, effective_status, and insights to filter out completed/empty campaigns
     let budgetMap = {};
     let spendMap = {};
+    let campaignsWithActiveAdsets = new Set();
     if (campIds.length) {
       const adsets = await metaGet(`${AD_ACCOUNT_ID}/adsets`, {
-        fields: 'campaign_id,lifetime_budget,daily_budget',
+        fields: 'campaign_id,lifetime_budget,daily_budget,effective_status',
         filtering: JSON.stringify([{ field: 'campaign.id', operator: 'IN', value: campIds }]),
         limit: '200'
       });
@@ -36,6 +37,7 @@ module.exports = async function handler(req, res) {
         if (!budgetMap[as.campaign_id]) budgetMap[as.campaign_id] = 0;
         if (as.lifetime_budget) budgetMap[as.campaign_id] += parseInt(as.lifetime_budget) / 100;
         else if (as.daily_budget) budgetMap[as.campaign_id] += parseInt(as.daily_budget) / 100;
+        if (as.effective_status === 'ACTIVE') campaignsWithActiveAdsets.add(as.campaign_id);
       }
 
       const insights = await metaGet(`${AD_ACCOUNT_ID}/insights`, {
@@ -52,6 +54,7 @@ module.exports = async function handler(req, res) {
 
     const now = new Date();
     const activeCount = campaigns.filter(c => {
+      if (!campaignsWithActiveAdsets.has(c.id)) return false;
       if (c.stop_time && new Date(c.stop_time) < now) return false;
       let totalBudget = null;
       if (c.lifetime_budget) totalBudget = parseInt(c.lifetime_budget) / 100;
