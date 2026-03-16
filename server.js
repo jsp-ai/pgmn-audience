@@ -452,32 +452,27 @@ async function resolvePost(postUrl) {
       source: 'fb_post_lookup',
       warnings: [],
     };
-    // Try to query the actual post for tags and caption
+    // First try as video (for reels/videos) — full_picture is deprecated on post objects
+    try {
+      const video = await pageGet(urlId, { fields: 'description,thumbnails{uri,is_preferred},picture' });
+      if (!video.error && (video.thumbnails || video.picture)) {
+        if (video.description) result.caption = video.description;
+        const preferred = video.thumbnails && video.thumbnails.data
+          ? video.thumbnails.data.find(t => t.is_preferred) || video.thumbnails.data[0]
+          : null;
+        result.thumbnail = (preferred && preferred.uri) || video.picture || null;
+        content_type = 'reel';
+        result.content_type = content_type;
+      }
+    } catch (e) { /* not a video */ }
+
+    // Then try as post for tags/mentions
     try {
       const post = await pageGet(objectStoryId, {
-        fields: 'message,message_tags,to,story_tags,full_picture,picture,type'
+        fields: 'message,message_tags,to,story_tags'
       });
       if (!post.error) {
-        if (post.message) result.caption = post.message;
-        result.thumbnail = post.full_picture || post.picture || null;
-        // For videos/reels, also try fetching thumbnail from the video endpoint
-        if (!result.thumbnail && urlId) {
-          try {
-            const video = await pageGet(urlId, { fields: 'thumbnails{uri},picture' });
-            if (!video.error) {
-              if (video.thumbnails && video.thumbnails.data && video.thumbnails.data.length > 0) {
-                result.thumbnail = video.thumbnails.data[0].uri;
-              } else if (video.picture) {
-                result.thumbnail = video.picture;
-              }
-            }
-          } catch (e) { /* video thumbnail fetch failed */ }
-        }
-        // Detect video posts and set content_type to reel for ThruPlay optimization
-        if (post.type === 'video' || post.type === 'added_video') {
-          content_type = 'reel';
-          result.content_type = content_type;
-        }
+        if (post.message && !result.caption) result.caption = post.message;
         const hasTags = (post.message_tags && post.message_tags.length > 0)
           || (post.to && post.to.data && post.to.data.length > 0)
           || (post.story_tags && Object.keys(post.story_tags).length > 0);
