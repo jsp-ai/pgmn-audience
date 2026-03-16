@@ -87,8 +87,9 @@ module.exports = async function handler(req, res) {
     const name = campaign_name || `PGMN Campaign - ${budget_php}PHP ${duration_days}d`;
 
     // Determine objective & optimization based on content type
+    // Both use OUTCOME_ENGAGEMENT — videos optimize for THRUPLAY, photos for POST_ENGAGEMENT
     const isReel = content_type === 'reel';
-    const objective = isReel ? 'OUTCOME_AWARENESS' : 'OUTCOME_ENGAGEMENT';
+    const objective = 'OUTCOME_ENGAGEMENT';
     const optimizationGoal = isReel ? 'THRUPLAY' : 'POST_ENGAGEMENT';
 
     // 1. Create campaign
