@@ -149,10 +149,12 @@ module.exports = async function handler(req, res) {
         lifetime_budget: String(Math.round(budgetPhp * 100)),
         bid_strategy: 'LOWEST_COST_WITHOUT_CAP',
         optimization_goal: optimizationGoal, billing_event: 'IMPRESSIONS',
-        destination_type: isReel ? (use_ig_media ? 'ON_AD' : 'UNDEFINED') : 'ON_POST',
         start_time: fmt(now), end_time: fmt(end),
         targeting: JSON.stringify(t), status: 'ACTIVE'
       };
+      // Set destination_type: UNDEFINED for all video/reel ads (FB & IG), ON_POST for photos
+      if (isReel) adsetParams.destination_type = 'UNDEFINED';
+      else adsetParams.destination_type = 'ON_POST';
       const adset = await metaPost(`${AD_ACCOUNT_ID}/adsets`, adsetParams);
       if (adset.error) {
         results.adsets.push({ error: adset.error });
