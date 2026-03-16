@@ -182,6 +182,40 @@ module.exports = async function handler(req, res) {
         } else if (storyId) {
           creativeParams.object_story_id = storyId;
           creative = await metaPost(`${AD_ACCOUNT_ID}/adcreatives`, creativeParams);
+
+          // Fallback for FB reels: if object_story_id fails (video ID ≠ post ID),
+          // create a dark post via ads_posts using the video, then use that post's ID.
+          if (creative.error && creative.error.error_subcode === 1487472 && isReel && post_id) {
+            try {
+              // Create an ads_post (dark post) with the reel video attached
+              const adsPost = await metaPost(`${PAGE_ID}/ads_posts`, {
+                message: campaign_name || '',
+                attached_media: JSON.stringify([{ media_fbid: post_id }]),
+              });
+              if (adsPost && adsPost.id && !adsPost.error) {
+                const fallbackParams = { name: `${adsetName} - Creative` };
+                if (political) fallbackParams.authorization_category = 'POLITICAL';
+                fallbackParams.object_story_id = adsPost.id;
+                creative = await metaPost(`${AD_ACCOUNT_ID}/adcreatives`, fallbackParams);
+              }
+            } catch (e) { /* fallback failed, will show original error */ }
+
+            // Second fallback: try video_data creative spec
+            if (creative.error) {
+              try {
+                const videoParams = { name: `${adsetName} - Creative` };
+                if (political) videoParams.authorization_category = 'POLITICAL';
+                videoParams.object_story_spec = JSON.stringify({
+                  page_id: PAGE_ID,
+                  video_data: {
+                    video_id: post_id,
+                    message: campaign_name || '',
+                  },
+                });
+                creative = await metaPost(`${AD_ACCOUNT_ID}/adcreatives`, videoParams);
+              } catch (e) { /* second fallback failed */ }
+            }
+          }
         }
         if (!creative) {
           results.ads.push({ error: 'No creative_id, ig_media, or object_story_id provided' });
