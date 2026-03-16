@@ -636,7 +636,7 @@ async function launchCampaign(body) {
       lifetime_budget: String(Math.round(budgetPhp * 100)),
       bid_strategy: 'LOWEST_COST_WITHOUT_CAP',
       optimization_goal: optimizationGoal, billing_event: 'IMPRESSIONS',
-      destination_type: isReel ? 'UNDEFINED' : 'ON_POST',
+      destination_type: (isReel && !use_ig_media) ? 'UNDEFINED' : 'ON_POST',
       start_time: fmt(now), end_time: fmt(end),
       targeting: JSON.stringify(t), status: 'ACTIVE'
     };
