@@ -700,36 +700,29 @@ async function launchCampaign(body) {
         creative = await metaPost(`${AD_ACCOUNT_ID}/adcreatives`, creativeParams);
 
         // Fallback for FB reels: if object_story_id fails (video ID ≠ post ID),
-        // create a dark post via ads_posts using the video, then use that post's ID.
+        // search promotable_posts for the correct post ID containing this video.
         if (creative.error && creative.error.error_subcode === 1487472 && isReel && post_id) {
           try {
-            const adsPost = await metaPost(`${PAGE_ID}/ads_posts`, {
-              message: campaign_name || '',
-              attached_media: JSON.stringify([{ media_fbid: post_id }]),
+            const promotable = await pageGet(`${PAGE_ID}/promotable_posts`, {
+              fields: 'id,permalink_url,message,attachments{target{id}}',
+              limit: '50',
+              include_inline_create: 'true',
             });
-            if (adsPost && adsPost.id && !adsPost.error) {
-              const fallbackParams = { name: `${adsetName} - Creative` };
-              if (political) fallbackParams.authorization_category = 'POLITICAL';
-              fallbackParams.object_story_id = adsPost.id;
-              creative = await metaPost(`${AD_ACCOUNT_ID}/adcreatives`, fallbackParams);
+            if (promotable.data) {
+              for (const p of promotable.data) {
+                const hasVideo = p.attachments && p.attachments.data &&
+                  p.attachments.data.some(att => att.target && att.target.id === post_id);
+                const inPermalink = p.permalink_url && p.permalink_url.includes(post_id);
+                if (hasVideo || inPermalink) {
+                  const fallbackParams = { name: `${adsetName} - Creative` };
+                  if (political) fallbackParams.authorization_category = 'POLITICAL';
+                  fallbackParams.object_story_id = p.id;
+                  creative = await metaPost(`${AD_ACCOUNT_ID}/adcreatives`, fallbackParams);
+                  break;
+                }
+              }
             }
-          } catch (e) { /* fallback failed */ }
-
-          // Second fallback: try video_data creative spec
-          if (creative.error) {
-            try {
-              const videoParams = { name: `${adsetName} - Creative` };
-              if (political) videoParams.authorization_category = 'POLITICAL';
-              videoParams.object_story_spec = JSON.stringify({
-                page_id: PAGE_ID,
-                video_data: {
-                  video_id: post_id,
-                  message: campaign_name || '',
-                },
-              });
-              creative = await metaPost(`${AD_ACCOUNT_ID}/adcreatives`, videoParams);
-            } catch (e) { /* second fallback failed */ }
-          }
+          } catch (e) { /* promotable_posts lookup failed */ }
         }
       }
       if (!creative) {
