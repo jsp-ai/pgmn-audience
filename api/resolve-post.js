@@ -302,9 +302,23 @@ module.exports = async function handler(req, res) {
     }
 
     // ─── Not found ───
+    // Debug: include diagnostic info to help troubleshoot
+    let debugInfo = {};
+    if (isInstagram && urlId) {
+      try {
+        const igAcct = await getIgAccountId();
+        debugInfo.ig_account_id = igAcct || 'null';
+        if (igAcct) {
+          const testMedia = await pageGet(`${igAcct}/media`, { fields: 'id,shortcode', limit: '3' });
+          debugInfo.media_access = testMedia.error ? testMedia.error.message : `ok (${(testMedia.data||[]).length} posts)`;
+          debugInfo.token_prefix = (PAGE_ACCESS_TOKEN || '').substring(0, 20) + '...';
+        }
+      } catch (e) { debugInfo.error = e.message; }
+    }
     return res.status(200).json({
       resolved: false, url_id: urlId, platform, content_type,
       message: 'Post not found. Make sure the URL is correct and the post belongs to your connected Instagram/Facebook account.',
+      debug: debugInfo,
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
