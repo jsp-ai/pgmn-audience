@@ -208,9 +208,48 @@ module.exports = async function handler(req, res) {
         }
       } catch (e) { /* not a video */ }
 
+      // For FB reels, the URL ID is the VIDEO ID which may differ from the POST ID.
+      // Check if the object_story_id is valid and try to find the correct post ID.
+      if (isReelUrl) {
+        try {
+          // Check if PAGE_ID_VIDEO_ID is a valid post reference
+          const postCheck = await pageGet(objectStoryId, { fields: 'id,is_eligible_for_promotion' });
+          if (postCheck.error) {
+            // object_story_id with video ID is invalid — try to find the actual post
+            // Search recent Page posts for one that contains this video
+            try {
+              const pagePosts = await pageGet(`${PAGE_ID}/published_posts`, {
+                fields: 'id,attachments{media}',
+                limit: '30'
+              });
+              if (pagePosts.data) {
+                for (const p of pagePosts.data) {
+                  const attachments = p.attachments && p.attachments.data;
+                  if (attachments) {
+                    for (const att of attachments) {
+                      if (att.media && att.media.id === urlId) {
+                        // Found the post containing this video
+                        const actualPostId = p.id.includes('_') ? p.id.split('_')[1] : p.id;
+                        result.post_id = actualPostId;
+                        result.object_story_id = p.id.includes('_') ? p.id : `${PAGE_ID}_${actualPostId}`;
+                        result.warnings.push(`Reel video ID ${urlId} resolved to post ID ${actualPostId}`);
+                        break;
+                      }
+                    }
+                  }
+                  if (result.post_id !== urlId) break;
+                }
+              }
+            } catch (e) { /* couldn't search posts */ }
+          } else if (postCheck.is_eligible_for_promotion === false) {
+            result.warnings.push('This post is not eligible for promotion. It may contain copyrighted music, AR effects, or other restricted content.');
+          }
+        } catch (e) { /* promotion check failed */ }
+      }
+
       // Then try as post for tags/mentions (use fields that aren't deprecated)
       try {
-        const post = await pageGet(objectStoryId, {
+        const post = await pageGet(result.object_story_id, {
           fields: 'message,message_tags,to,story_tags'
         });
         if (!post.error) {

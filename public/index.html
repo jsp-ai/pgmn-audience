@@ -1106,6 +1106,8 @@
                         errMsg = 'This post has tagged users or is a collab post. Meta restricts boosting tagged/collab content — remove tags and try again.';
                     } else if (errMsg.includes('Session has expired') || errMsg.includes('Error validating access token')) {
                         errMsg = 'Meta access token has expired. Please refresh the token in Vercel environment variables.';
+                    } else if (errMsg.includes("Page Post Can't Be Used") || errMsg.includes("can't be promoted")) {
+                        errMsg = "This post can't be promoted. It may contain copyrighted music, AR effects, or other restricted content. Try a different post, or boost it directly from Facebook.";
                     }
                     showToast(errMsg, true);
                 }
