@@ -87,10 +87,12 @@ module.exports = async function handler(req, res) {
     const name = campaign_name || `PGMN Campaign - ${budget_php}PHP ${duration_days}d`;
 
     // Determine objective & optimization based on content type
-    // Both use OUTCOME_ENGAGEMENT — videos optimize for THRUPLAY, photos for POST_ENGAGEMENT
+    // ThruPlay only works for FB videos (OUTCOME_AWARENESS + THRUPLAY + UNDEFINED destination)
+    // IG posts (all types) and FB photos use OUTCOME_ENGAGEMENT + POST_ENGAGEMENT + ON_POST
     const isReel = content_type === 'reel';
-    const objective = 'OUTCOME_ENGAGEMENT';
-    const optimizationGoal = isReel ? 'THRUPLAY' : 'POST_ENGAGEMENT';
+    const isFbReel = isReel && !use_ig_media;
+    const objective = isFbReel ? 'OUTCOME_AWARENESS' : 'OUTCOME_ENGAGEMENT';
+    const optimizationGoal = isFbReel ? 'THRUPLAY' : 'POST_ENGAGEMENT';
 
     // 1. Create campaign
     const campaignParams = {
@@ -148,7 +150,7 @@ module.exports = async function handler(req, res) {
         lifetime_budget: String(Math.round(budgetPhp * 100)),
         bid_strategy: 'LOWEST_COST_WITHOUT_CAP',
         optimization_goal: optimizationGoal, billing_event: 'IMPRESSIONS',
-        destination_type: (isReel && !use_ig_media) ? 'UNDEFINED' : 'ON_POST',
+        destination_type: isFbReel ? 'UNDEFINED' : 'ON_POST',
         start_time: fmt(now), end_time: fmt(end),
         targeting: JSON.stringify(t), status: 'ACTIVE'
       };
