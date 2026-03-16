@@ -455,11 +455,24 @@ async function resolvePost(postUrl) {
     // Try to query the actual post for tags and caption
     try {
       const post = await pageGet(objectStoryId, {
-        fields: 'message,message_tags,to,story_tags,full_picture,type'
+        fields: 'message,message_tags,to,story_tags,full_picture,picture,type'
       });
       if (!post.error) {
         if (post.message) result.caption = post.message;
-        if (post.full_picture) result.thumbnail = post.full_picture;
+        result.thumbnail = post.full_picture || post.picture || null;
+        // For videos/reels, also try fetching thumbnail from the video endpoint
+        if (!result.thumbnail && urlId) {
+          try {
+            const video = await pageGet(urlId, { fields: 'thumbnails{uri},picture' });
+            if (!video.error) {
+              if (video.thumbnails && video.thumbnails.data && video.thumbnails.data.length > 0) {
+                result.thumbnail = video.thumbnails.data[0].uri;
+              } else if (video.picture) {
+                result.thumbnail = video.picture;
+              }
+            }
+          } catch (e) { /* video thumbnail fetch failed */ }
+        }
         // Detect video posts and set content_type to reel for ThruPlay optimization
         if (post.type === 'video' || post.type === 'added_video') {
           content_type = 'reel';
