@@ -332,7 +332,7 @@ function calculateMetrics(insight) {
 
 async function getIgAccountId() {
   try {
-    const pageData = await metaGet(PAGE_ID, { fields: 'instagram_business_account' });
+    const pageData = await pageGet(PAGE_ID, { fields: 'instagram_business_account' });
     if (pageData.instagram_business_account) return pageData.instagram_business_account.id;
   } catch (e) { /* ignore */ }
   return null;
@@ -488,7 +488,7 @@ async function resolvePost(postUrl) {
         for (let page = 0; page < 3; page++) {
           let igMedia;
           if (page === 0) {
-            igMedia = await metaGet(`${igAccountId}/media`, { fields: mediaFields, limit: '50' });
+            igMedia = await pageGet(`${igAccountId}/media`, { fields: mediaFields, limit: '50' });
           } else if (nextUrl) {
             igMedia = await new Promise((resolve) => {
               https.get(nextUrl, r => {
@@ -513,7 +513,7 @@ async function resolvePost(postUrl) {
             let childrenCount = 0;
             if (igMatched.media_type === 'CAROUSEL_ALBUM') {
               try {
-                const children = await metaGet(`${igMatched.id}/children`, { fields: 'id', limit: '50' });
+                const children = await pageGet(`${igMatched.id}/children`, { fields: 'id', limit: '50' });
                 if (children.data) childrenCount = children.data.length;
               } catch (e) { /* ignore */ }
             }

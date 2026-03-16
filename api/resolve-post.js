@@ -75,13 +75,13 @@ function resolveFbPostId(inputUrl) {
   });
 }
 
-// Get IG Business Account ID (cached)
+// Get IG Business Account ID (cached) — uses pageGet for instagram_basic permission
 async function getIgAccountId() {
   if (igAccountCache.id && Date.now() - igAccountCache.ts < CACHE_TTL) {
     return igAccountCache.id;
   }
   try {
-    const pageData = await metaGet(PAGE_ID, { fields: 'instagram_business_account' });
+    const pageData = await pageGet(PAGE_ID, { fields: 'instagram_business_account' });
     if (pageData.instagram_business_account) {
       igAccountCache = { id: pageData.instagram_business_account.id, ts: Date.now() };
       return igAccountCache.id;
@@ -232,7 +232,7 @@ module.exports = async function handler(req, res) {
           for (let page = 0; page < 3; page++) {
             let igMedia;
             if (page === 0) {
-              igMedia = await metaGet(`${igAccountId}/media`, { fields: mediaFields, limit: '50' });
+              igMedia = await pageGet(`${igAccountId}/media`, { fields: mediaFields, limit: '50' });
             } else if (nextUrl) {
               // Fetch next page directly via full URL
               igMedia = await new Promise((resolve, reject) => {
@@ -262,7 +262,7 @@ module.exports = async function handler(req, res) {
               let childrenCount = 0;
               if (igMatched.media_type === 'CAROUSEL_ALBUM') {
                 try {
-                  const children = await metaGet(`${igMatched.id}/children`, { fields: 'id', limit: '50' });
+                  const children = await pageGet(`${igMatched.id}/children`, { fields: 'id', limit: '50' });
                   if (children.data) childrenCount = children.data.length;
                 } catch (e) { /* ignore */ }
               }
