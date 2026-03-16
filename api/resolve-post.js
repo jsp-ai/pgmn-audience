@@ -306,13 +306,14 @@ module.exports = async function handler(req, res) {
     let debugInfo = {};
     if (isInstagram && urlId) {
       try {
-        const igAcct = await getIgAccountId();
-        debugInfo.ig_account_id = igAcct || 'null';
-        if (igAcct) {
-          const testMedia = await pageGet(`${igAcct}/media`, { fields: 'id,shortcode', limit: '3' });
-          debugInfo.media_access = testMedia.error ? testMedia.error.message : `ok (${(testMedia.data||[]).length} posts)`;
-          debugInfo.token_prefix = (PAGE_ACCESS_TOKEN || '').substring(0, 20) + '...';
-        }
+        debugInfo.token_prefix = (PAGE_ACCESS_TOKEN || 'EMPTY').substring(0, 20) + '...';
+        debugInfo.page_id = PAGE_ID;
+        // Try direct pageGet for IG account
+        const pageData = await pageGet(PAGE_ID, { fields: 'instagram_business_account' });
+        debugInfo.page_response = pageData.error ? pageData.error.message : (pageData.instagram_business_account ? pageData.instagram_business_account.id : 'no_ig_account');
+        // Also try metaGet for comparison
+        const metaData = await metaGet(PAGE_ID, { fields: 'instagram_business_account' });
+        debugInfo.meta_response = metaData.error ? metaData.error.message : (metaData.instagram_business_account ? metaData.instagram_business_account.id : 'no_ig_account');
       } catch (e) { debugInfo.error = e.message; }
     }
     return res.status(200).json({
