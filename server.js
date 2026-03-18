@@ -12,7 +12,11 @@ const env = {};
 if (fs.existsSync(envPath)) {
   fs.readFileSync(envPath, 'utf8').split('\n').forEach(line => {
     const [key, ...val] = line.split('=');
-    if (key && val.length) env[key.trim()] = val.join('=').trim();
+    if (key && val.length) {
+      const k = key.trim(), v = val.join('=').trim();
+      env[k] = v;
+      if (!process.env[k]) process.env[k] = v;
+    }
   });
 }
 
@@ -700,29 +704,67 @@ async function launchCampaign(body) {
         creative = await metaPost(`${AD_ACCOUNT_ID}/adcreatives`, creativeParams);
 
         // Fallback for FB reels: if object_story_id fails (video ID ≠ post ID),
-        // search promotable_posts for the correct post ID containing this video.
+        // try multiple approaches to find the correct promotable post ID.
         if (creative.error && creative.error.error_subcode === 1487472 && isReel && post_id) {
+          const fallbackDebug = {};
+
+          // Approach 1: Query video directly for permalink
           try {
-            const promotable = await pageGet(`${PAGE_ID}/promotable_posts`, {
-              fields: 'id,permalink_url,message,attachments{target{id}}',
-              limit: '50',
-              include_inline_create: 'true',
-            });
-            if (promotable.data) {
-              for (const p of promotable.data) {
-                const hasVideo = p.attachments && p.attachments.data &&
-                  p.attachments.data.some(att => att.target && att.target.id === post_id);
-                const inPermalink = p.permalink_url && p.permalink_url.includes(post_id);
-                if (hasVideo || inPermalink) {
-                  const fallbackParams = { name: `${adsetName} - Creative` };
-                  if (political) fallbackParams.authorization_category = 'POLITICAL';
-                  fallbackParams.object_story_id = p.id;
-                  creative = await metaPost(`${AD_ACCOUNT_ID}/adcreatives`, fallbackParams);
-                  break;
-                }
+            const videoInfo = await pageGet(post_id, { fields: 'id,permalink_url,from' });
+            fallbackDebug.video_info = videoInfo.error
+              ? { error: videoInfo.error.message }
+              : { id: videoInfo.id, permalink: videoInfo.permalink_url, from: videoInfo.from };
+            if (videoInfo.permalink_url) {
+              const storyMatch = videoInfo.permalink_url.match(/story_fbid=(\d+)/);
+              const postsMatch = videoInfo.permalink_url.match(/\/posts\/(\d+)/);
+              const extractedId = (storyMatch && storyMatch[1]) || (postsMatch && postsMatch[1]);
+              if (extractedId && extractedId !== post_id) {
+                const fallbackParams = { name: `${adsetName} - Creative` };
+                if (political) fallbackParams.authorization_category = 'POLITICAL';
+                fallbackParams.object_story_id = `${PAGE_ID}_${extractedId}`;
+                fallbackDebug.permalink_extracted_id = extractedId;
+                creative = await metaPost(`${AD_ACCOUNT_ID}/adcreatives`, fallbackParams);
               }
             }
-          } catch (e) { /* promotable_posts lookup failed */ }
+          } catch (e) { fallbackDebug.video_error = e.message; }
+
+          // Approach 2: Search promotable_posts
+          if (creative.error) {
+            try {
+              const promotable = await pageGet(`${PAGE_ID}/promotable_posts`, {
+                fields: 'id,permalink_url,attachments{target{id},media_type,type}',
+                limit: '50',
+                include_inline_create: 'true',
+              });
+              fallbackDebug.promotable_count = promotable.data ? promotable.data.length : 0;
+              fallbackDebug.promotable_error = promotable.error ? promotable.error.message : null;
+              fallbackDebug.promotable_sample = (promotable.data || []).slice(0, 5).map(p => ({
+                id: p.id, permalink: p.permalink_url,
+                attachments: p.attachments && p.attachments.data
+                  ? p.attachments.data.map(a => ({ target_id: a.target && a.target.id, type: a.type || a.media_type }))
+                  : null,
+              }));
+              if (promotable.data) {
+                for (const p of promotable.data) {
+                  const hasVideo = p.attachments && p.attachments.data &&
+                    p.attachments.data.some(att => att.target && att.target.id === post_id);
+                  const inPermalink = p.permalink_url && p.permalink_url.includes(post_id);
+                  if (hasVideo || inPermalink) {
+                    const fallbackParams = { name: `${adsetName} - Creative` };
+                    if (political) fallbackParams.authorization_category = 'POLITICAL';
+                    fallbackParams.object_story_id = p.id;
+                    fallbackDebug.matched_post_id = p.id;
+                    creative = await metaPost(`${AD_ACCOUNT_ID}/adcreatives`, fallbackParams);
+                    break;
+                  }
+                }
+              }
+            } catch (e) { fallbackDebug.promotable_error = e.message; }
+          }
+
+          if (creative.error) {
+            creative.error._fallback_debug = fallbackDebug;
+          }
         }
       }
       if (!creative) {
@@ -931,6 +973,67 @@ const server = http.createServer(async (req, res) => {
     if (pathname === '/api/campaigns/status' && req.method === 'POST') {
       const body = await parseBody(req);
       return sendJSON(res, await updateCampaignStatus(body.campaign_id, body.action));
+    }
+
+    // --- YouTube routes (delegate to Vercel-style serverless handlers) ---
+    if (pathname === '/api/resolve-youtube' && req.method === 'GET') {
+      const resolveYouTube = require('./api/resolve-youtube');
+      const fakeReq = { method: 'GET', query: parsed.query || {}, headers: req.headers };
+      const fakeRes = {
+        statusCode: 200,
+        _headers: {},
+        _body: null,
+        setHeader(k, v) { this._headers[k] = v; },
+        status(code) { this.statusCode = code; return this; },
+        json(data) { sendJSON(res, data, this.statusCode); },
+        end(data) { res.writeHead(this.statusCode, this._headers); res.end(data); },
+        writeHead(code, headers) { res.writeHead(code, headers); },
+      };
+      return resolveYouTube(fakeReq, fakeRes);
+    }
+    if (pathname === '/api/launch-youtube' && req.method === 'POST') {
+      const launchYouTube = require('./api/launch-youtube');
+      const body = await parseBody(req);
+      const fakeReq = { method: 'POST', body, headers: req.headers };
+      const fakeRes = {
+        statusCode: 200,
+        _headers: {},
+        setHeader(k, v) { this._headers[k] = v; },
+        status(code) { this.statusCode = code; return this; },
+        json(data) { sendJSON(res, data, this.statusCode); },
+        end(data) { res.writeHead(this.statusCode, this._headers); res.end(data); },
+        writeHead(code, headers) { res.writeHead(code, headers); },
+      };
+      return launchYouTube(fakeReq, fakeRes);
+    }
+    if (pathname === '/api/google-oauth' && req.method === 'GET') {
+      const googleOAuth = require('./api/google-oauth');
+      const fakeReq = { method: 'GET', headers: req.headers };
+      const fakeRes = {
+        statusCode: 200,
+        _headers: {},
+        _headersSent: false,
+        setHeader(k, v) { this._headers[k] = v; },
+        status(code) { this.statusCode = code; return this; },
+        json(data) { sendJSON(res, data, this.statusCode); },
+        end(data) { if (!this._headersSent) { res.writeHead(this.statusCode, this._headers); this._headersSent = true; } res.end(data); },
+        writeHead(code, headers) { if (!this._headersSent) { res.writeHead(code, headers); this._headersSent = true; } },
+      };
+      return googleOAuth(fakeReq, fakeRes);
+    }
+    if (pathname === '/api/google-oauth-callback' && req.method === 'GET') {
+      const googleCallback = require('./api/google-oauth-callback');
+      const fakeReq = { method: 'GET', query: parsed.query || {}, headers: req.headers };
+      const fakeRes = {
+        statusCode: 200,
+        _headers: {},
+        setHeader(k, v) { this._headers[k] = v; },
+        status(code) { this.statusCode = code; return this; },
+        json(data) { sendJSON(res, data, this.statusCode); },
+        end(data) { res.writeHead(this.statusCode, this._headers); res.end(data); },
+        writeHead(code, headers) { res.writeHead(code, headers); },
+      };
+      return googleCallback(fakeReq, fakeRes);
     }
 
     sendJSON(res, { error: 'Not found' }, 404);

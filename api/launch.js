@@ -184,32 +184,71 @@ module.exports = async function handler(req, res) {
           creative = await metaPost(`${AD_ACCOUNT_ID}/adcreatives`, creativeParams);
 
           // Fallback for FB reels: if object_story_id fails (video ID ≠ post ID),
-          // search promotable_posts for the correct post ID containing this video.
+          // try multiple approaches to find the correct promotable post ID.
           if (creative.error && creative.error.error_subcode === 1487472 && isReel && post_id) {
+            const fallbackDebug = {};
+
+            // Approach 1: Query the video directly for permalink (may reveal post ID)
             try {
-              // Search promotable posts to find the reel's actual post ID
-              const promotable = await pageGet(`${PAGE_ID}/promotable_posts`, {
-                fields: 'id,permalink_url,message,attachments{target{id}}',
-                limit: '50',
-                include_inline_create: 'true',
-              });
-              if (promotable.data) {
-                for (const p of promotable.data) {
-                  // Match by video ID in attachments or permalink
-                  const hasVideo = p.attachments && p.attachments.data &&
-                    p.attachments.data.some(att => att.target && att.target.id === post_id);
-                  const inPermalink = p.permalink_url && p.permalink_url.includes(post_id);
-                  if (hasVideo || inPermalink) {
-                    // Found it — retry creative with the correct post ID
-                    const fallbackParams = { name: `${adsetName} - Creative` };
-                    if (political) fallbackParams.authorization_category = 'POLITICAL';
-                    fallbackParams.object_story_id = p.id;
-                    creative = await metaPost(`${AD_ACCOUNT_ID}/adcreatives`, fallbackParams);
-                    break;
-                  }
+              const videoInfo = await pageGet(post_id, { fields: 'id,permalink_url,from' });
+              fallbackDebug.video_info = videoInfo.error
+                ? { error: videoInfo.error.message }
+                : { id: videoInfo.id, permalink: videoInfo.permalink_url, from: videoInfo.from };
+              // Try extracting post ID from permalink (e.g., /posts/XXXXX/ or story_fbid=XXXXX)
+              if (videoInfo.permalink_url) {
+                const storyMatch = videoInfo.permalink_url.match(/story_fbid=(\d+)/);
+                const postsMatch = videoInfo.permalink_url.match(/\/posts\/(\d+)/);
+                const extractedId = (storyMatch && storyMatch[1]) || (postsMatch && postsMatch[1]);
+                if (extractedId && extractedId !== post_id) {
+                  const fallbackParams = { name: `${adsetName} - Creative` };
+                  if (political) fallbackParams.authorization_category = 'POLITICAL';
+                  fallbackParams.object_story_id = `${PAGE_ID}_${extractedId}`;
+                  fallbackDebug.permalink_extracted_id = extractedId;
+                  creative = await metaPost(`${AD_ACCOUNT_ID}/adcreatives`, fallbackParams);
                 }
               }
-            } catch (e) { /* promotable_posts lookup failed */ }
+            } catch (e) { fallbackDebug.video_error = e.message; }
+
+            // Approach 2: Search promotable_posts
+            if (creative.error) {
+              try {
+                const promotable = await pageGet(`${PAGE_ID}/promotable_posts`, {
+                  fields: 'id,permalink_url,attachments{target{id},media_type,type}',
+                  limit: '50',
+                  include_inline_create: 'true',
+                });
+                fallbackDebug.promotable_count = promotable.data ? promotable.data.length : 0;
+                fallbackDebug.promotable_error = promotable.error ? promotable.error.message : null;
+                // Log first 5 for debugging
+                fallbackDebug.promotable_sample = (promotable.data || []).slice(0, 5).map(p => ({
+                  id: p.id,
+                  permalink: p.permalink_url,
+                  attachments: p.attachments && p.attachments.data
+                    ? p.attachments.data.map(a => ({ target_id: a.target && a.target.id, type: a.type || a.media_type }))
+                    : null,
+                }));
+                if (promotable.data) {
+                  for (const p of promotable.data) {
+                    const hasVideo = p.attachments && p.attachments.data &&
+                      p.attachments.data.some(att => att.target && att.target.id === post_id);
+                    const inPermalink = p.permalink_url && p.permalink_url.includes(post_id);
+                    if (hasVideo || inPermalink) {
+                      const fallbackParams = { name: `${adsetName} - Creative` };
+                      if (political) fallbackParams.authorization_category = 'POLITICAL';
+                      fallbackParams.object_story_id = p.id;
+                      fallbackDebug.matched_post_id = p.id;
+                      creative = await metaPost(`${AD_ACCOUNT_ID}/adcreatives`, fallbackParams);
+                      break;
+                    }
+                  }
+                }
+              } catch (e) { fallbackDebug.promotable_error = e.message; }
+            }
+
+            // Attach fallback debug info to the error
+            if (creative.error) {
+              creative.error._fallback_debug = fallbackDebug;
+            }
           }
         }
         if (!creative) {
