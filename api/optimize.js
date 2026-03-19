@@ -155,16 +155,20 @@ module.exports = async function handler(req, res) {
       } catch (e) { /* Google Ads query failed, continue with Meta-only */ }
     }
 
-    if (!campaignData.length) {
+    // Filter: only analyze campaigns with actual spend (> 0 PHP)
+    const activeCampaigns = campaignData.filter(c => c.spend > 0);
+    const zeroCampaigns = campaignData.filter(c => c.spend === 0);
+
+    if (!activeCampaigns.length) {
       return res.status(200).json({
-        campaigns: [],
+        campaigns: campaignData,
         meta_campaigns_found: campaigns.length,
         debug_errors: debugErrors,
-        ai_analysis: { summary: 'Active campaigns found but no insight data yet.', recommendations: [] }
+        ai_analysis: { summary: 'Active campaigns found but no spend data yet.', recommendations: [] }
       });
     }
 
-    // 3. Send to Claude for analysis
+    // 3. Send to Claude for analysis (only campaigns with spend)
     const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
     const prompt = `You are PGMN's campaign optimizer. Your philosophy: EVERY piece of content deserves visibility. PGMN is a media network — establishing relevance on ALL content matters, not just chasing top performers. You NEVER pause or kill campaigns.
@@ -205,8 +209,8 @@ METRICS (in priority order):
 
 For Google Ads: CTR (target > 3%), cost_per_click (target < 4 PHP), video_views
 
-ACTIVE CAMPAIGNS:
-${JSON.stringify(campaignData, null, 2)}
+ACTIVE CAMPAIGNS (${activeCampaigns.length} with spend, ${zeroCampaigns.length} still learning/no spend):
+${JSON.stringify(activeCampaigns, null, 2)}
 
 For each campaign, recommend ONE action (NEVER pause/kill):
 
@@ -269,7 +273,7 @@ Return JSON only, no markdown:
 
     const response = await client.messages.create({
       model: 'claude-sonnet-4-6',
-      max_tokens: 3000,
+      max_tokens: 8000,
       messages: [{ role: 'user', content: prompt }]
     });
 
