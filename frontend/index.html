@@ -1154,7 +1154,6 @@
                                    isSubmitted ? 'SUBMITTED' :
                                    isProcessing ? 'PROCESSING' : c.status;
                 const budget = c.total_budget ? formatNum(c.total_budget) : '--';
-                const i = c.insights || {};
                 const engPeso = i.eng_per_peso || 0;
                 const epClass = engPeso >= 10 ? 'highlight' : '';
 
