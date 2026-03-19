@@ -1793,14 +1793,22 @@
             document.getElementById(tab + '-tab').classList.add('active');
             document.querySelector(`.tab-btn[onclick*="${tab}"]`).classList.add('active');
             if (tab === 'optimize') {
+                // Clean out bad history entries (from broken JSON parse era)
+                const rawHistory = JSON.parse(localStorage.getItem('pgmn_opt_history') || '[]');
+                const cleanHistory = rawHistory.filter(h => {
+                    const ai = h.data?.ai_analysis;
+                    return ai && !ai.raw_response && ai.recommendations && ai.recommendations.length > 0;
+                });
+                if (cleanHistory.length !== rawHistory.length) {
+                    localStorage.setItem('pgmn_opt_history', JSON.stringify(cleanHistory));
+                }
                 renderHistory();
-                // Auto-load last analysis on first visit
+                // Auto-load last valid analysis on first visit
                 if (!optimizeTabLoaded) {
                     optimizeTabLoaded = true;
-                    const history = JSON.parse(localStorage.getItem('pgmn_opt_history') || '[]');
-                    if (history.length > 0) {
-                        lastOptData = history[0].data;
-                        renderOptimizationResult(history[0].data);
+                    if (cleanHistory.length > 0) {
+                        lastOptData = cleanHistory[0].data;
+                        renderOptimizationResult(cleanHistory[0].data);
                     }
                 }
             }
