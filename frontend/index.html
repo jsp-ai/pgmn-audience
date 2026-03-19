@@ -234,7 +234,8 @@
             border-radius: 4px;
             text-transform: uppercase;
         }
-        .status-active { background: rgba(251, 4, 28, 0.1); color: #FB041C; }
+        .status-active { background: rgba(10, 143, 111, 0.12); color: #0a8f6f; }
+        .status-submitted { background: rgba(59, 130, 246, 0.12); color: #2563EB; }
         .status-paused { background: rgba(200, 160, 0, 0.1); color: #B08C00; }
         .status-processing { background: rgba(59, 130, 246, 0.12); color: #2563EB; }
         .status-completed { background: rgba(82, 101, 127, 0.1); color: #52657F; }
@@ -1140,10 +1141,17 @@
 
             list.innerHTML = campaigns.map(c => {
                 const isProcessing = c.status === 'IN_PROCESS' || c.status === 'WITH_ISSUES';
-                const statusClass = c.status === 'ACTIVE' ? 'status-active' :
+                const i = c.insights || {};
+                const hasMetrics = i.spend > 0 || i.impressions > 0;
+                const isDelivering = c.status === 'ACTIVE' && hasMetrics;
+                const isSubmitted = c.status === 'ACTIVE' && !hasMetrics;
+                const statusClass = isDelivering ? 'status-active' :
+                                   isSubmitted ? 'status-submitted' :
                                    c.status === 'PAUSED' ? 'status-paused' :
                                    isProcessing ? 'status-processing' : 'status-completed';
-                const statusLabel = isProcessing ? 'PROCESSING' : c.status;
+                const statusLabel = isDelivering ? 'DELIVERING' :
+                                   isSubmitted ? 'SUBMITTED' :
+                                   isProcessing ? 'PROCESSING' : c.status;
                 const budget = c.total_budget ? formatNum(c.total_budget) : '--';
                 const i = c.insights || {};
                 const engPeso = i.eng_per_peso || 0;
