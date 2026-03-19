@@ -655,30 +655,35 @@
         .app-wrapper.locked { display: none; }
 
         /* ─── Tab Navigation ─── */
+        .tab-nav-wrapper {
+            background: #1e3a48;
+            border-bottom: 2px solid #FB041C;
+        }
         .tab-nav {
             max-width: 900px;
             margin: 0 auto;
-            padding: 16px 24px 0;
+            padding: 0 24px;
             display: flex;
-            gap: 8px;
+            gap: 0;
         }
         .tab-btn {
             font-family: 'Bebas Neue', sans-serif;
-            font-size: 14px;
+            font-size: 15px;
             letter-spacing: 1.5px;
-            padding: 8px 20px;
-            border-radius: 6px;
-            border: 1px solid #E0E4E8;
+            padding: 12px 24px;
+            border-radius: 0;
+            border: none;
+            border-bottom: 3px solid transparent;
             background: transparent;
             color: #52657F;
             cursor: pointer;
             transition: all 0.2s;
         }
-        .tab-btn:hover { border-color: #52657F; color: #162831; }
+        .tab-btn:hover { color: #fff; }
         .tab-btn.active {
-            background: #FB041C;
             color: #fff;
-            border-color: #FB041C;
+            border-bottom-color: #FB041C;
+            background: rgba(251,4,28,0.08);
         }
         .tab-content { display: none; }
         .tab-content.active { display: flex; flex-direction: column; gap: 24px; }
@@ -876,9 +881,11 @@
       </div>
     </div>
 
-    <div class="tab-nav">
-        <button class="tab-btn active" onclick="switchTab('launch')">Launch Campaign</button>
-        <button class="tab-btn" onclick="switchTab('optimize')">Optimization</button>
+    <div class="tab-nav-wrapper">
+        <div class="tab-nav">
+            <button class="tab-btn active" onclick="switchTab('launch')">Launch Campaign</button>
+            <button class="tab-btn" onclick="switchTab('optimize')">Optimization</button>
+        </div>
     </div>
 
     <div class="container">
