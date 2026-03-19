@@ -817,6 +817,26 @@
         }
         .btn-run-opt:hover { background: #d9031a; transform: translateY(-1px); box-shadow: 0 4px 16px rgba(251,4,28,0.25); }
         .btn-run-opt:disabled { background: #8a9bab; cursor: not-allowed; transform: none; box-shadow: none; }
+
+        /* ─── Platform Filter ─── */
+        .platform-filter-btn {
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: 12px;
+            letter-spacing: 1px;
+            padding: 5px 14px;
+            border-radius: 4px;
+            border: 1px solid #E0E4E8;
+            background: #fff;
+            color: #52657F;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .platform-filter-btn:hover { border-color: #52657F; color: #162831; }
+        .platform-filter-btn.active {
+            background: #162831;
+            color: #fff;
+            border-color: #162831;
+        }
     </style>
 </head>
 <body>
@@ -978,6 +998,12 @@
         <!-- Active Campaigns -->
             <div class="panel">
                 <h2><div class="dot"></div> Active Campaigns</h2>
+                <div class="platform-filter" style="display:flex;gap:6px;margin-bottom:16px;">
+                    <button class="platform-filter-btn active" onclick="filterCampaigns('all')" data-filter="all">All</button>
+                    <button class="platform-filter-btn" onclick="filterCampaigns('facebook')" data-filter="facebook">Facebook</button>
+                    <button class="platform-filter-btn" onclick="filterCampaigns('instagram')" data-filter="instagram">Instagram</button>
+                    <button class="platform-filter-btn" onclick="filterCampaigns('youtube')" data-filter="youtube">YouTube</button>
+                </div>
                 <div id="campaign-list" class="campaign-list">
                     <div class="loading"><div class="spinner"></div> Loading campaigns...</div>
                 </div>
@@ -1063,7 +1089,8 @@
             try {
                 const res = await fetch(`${API}/api/campaigns`);
                 const data = await res.json();
-                renderCampaigns(data.data || []);
+                allCampaigns = data.data || [];
+                filterCampaigns(currentPlatformFilter);
             } catch (e) {
                 document.getElementById('campaign-list').innerHTML =
                     '<div class="empty">Could not connect to backend. Make sure the server is running on port 3000.</div>';
@@ -1082,6 +1109,27 @@
 
         // Store AI recommendations keyed by campaign_id
         let aiRecsMap = {};
+        let allCampaigns = []; // Store for filtering
+        let currentPlatformFilter = 'all';
+
+        function filterCampaigns(filter) {
+            currentPlatformFilter = filter;
+            document.querySelectorAll('.platform-filter-btn').forEach(b => b.classList.remove('active'));
+            document.querySelector(`.platform-filter-btn[data-filter="${filter}"]`).classList.add('active');
+            if (filter === 'all') {
+                renderCampaigns(allCampaigns);
+            } else {
+                const filtered = allCampaigns.filter(c => {
+                    const name = (c.name || '').toLowerCase();
+                    const platform = (c.platform || '').toLowerCase();
+                    if (filter === 'facebook') return name.includes('facebook') || (platform === 'meta' && !name.includes('instagram'));
+                    if (filter === 'instagram') return name.includes('instagram');
+                    if (filter === 'youtube') return platform === 'google_ads' || name.includes('youtube');
+                    return true;
+                });
+                renderCampaigns(filtered);
+            }
+        }
 
         function renderCampaigns(campaigns) {
             const list = document.getElementById('campaign-list');
