@@ -1034,7 +1034,10 @@
 
             <!-- AI Recommendations -->
             <div class="panel ai-panel" id="opt-recs-panel" style="display:none;">
-                <h2><span class="ai-badge">AI</span> Recommendations</h2>
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+                    <h2 style="margin-bottom:0;"><span class="ai-badge">AI</span> Recommendations</h2>
+                    <button class="btn-run-opt" id="btn-execute-all" onclick="executeOptimization()" style="width:auto;padding:8px 20px;font-size:14px;">Execute All</button>
+                </div>
                 <div id="opt-advice" style="display:none;margin-bottom:16px;"></div>
                 <div id="opt-recs-list"></div>
             </div>
@@ -1783,15 +1786,29 @@
 
         // Load on page load only (no auto-refresh to avoid Meta API rate limits)
         // ─── Tab Navigation ───
+        let optimizeTabLoaded = false;
         function switchTab(tab) {
             document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
             document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
             document.getElementById(tab + '-tab').classList.add('active');
             document.querySelector(`.tab-btn[onclick*="${tab}"]`).classList.add('active');
-            if (tab === 'optimize') renderHistory();
+            if (tab === 'optimize') {
+                renderHistory();
+                // Auto-load last analysis on first visit
+                if (!optimizeTabLoaded) {
+                    optimizeTabLoaded = true;
+                    const history = JSON.parse(localStorage.getItem('pgmn_opt_history') || '[]');
+                    if (history.length > 0) {
+                        lastOptData = history[0].data;
+                        renderOptimizationResult(history[0].data);
+                    }
+                }
+            }
         }
 
         // ─── Optimization ───
+        let lastOptData = null; // Store for Execute All
+
         async function runOptimization() {
             const btn = document.getElementById('btn-run-opt');
             btn.disabled = true;
@@ -1799,6 +1816,7 @@
             try {
                 const res = await fetch(`${API}/api/optimize?dry_run=true`);
                 const data = await res.json();
+                lastOptData = data;
                 renderOptimizationResult(data);
                 // Save to history
                 const history = JSON.parse(localStorage.getItem('pgmn_opt_history') || '[]');
@@ -1812,6 +1830,45 @@
             }
             btn.disabled = false;
             btn.textContent = 'Run Optimization Analysis';
+        }
+
+        async function executeOptimization() {
+            if (!lastOptData) { showToast('Run analysis first', true); return; }
+            const recs = (lastOptData.ai_analysis || {}).recommendations || [];
+            const actionable = recs.filter(r => r.action === 'SCALE' || r.action === 'EXTEND');
+            if (!actionable.length) { showToast('No SCALE or EXTEND actions to execute'); return; }
+
+            const btn = document.getElementById('btn-execute-all');
+            btn.disabled = true;
+            btn.textContent = 'Executing...';
+
+            let success = 0, failed = 0;
+            for (const rec of actionable) {
+                try {
+                    const body = { campaign_id: rec.campaign_id, platform: rec.platform || 'meta' };
+                    if (rec.action === 'SCALE' && rec.new_budget) {
+                        body.action = 'update_budget';
+                        body.lifetime_budget = rec.new_budget;
+                    } else if (rec.action === 'EXTEND' && rec.new_end_date) {
+                        body.action = 'extend';
+                        body.new_end_date = rec.new_end_date;
+                    } else continue;
+
+                    const res = await fetch(`${API}/api/campaigns`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(body)
+                    });
+                    const result = await res.json();
+                    if (result.error) { failed++; } else { success++; }
+                } catch (e) { failed++; }
+            }
+
+            btn.disabled = false;
+            btn.textContent = 'Execute All';
+            showToast(`Executed: ${success} succeeded, ${failed} failed`);
+            // Refresh campaigns to show updated data
+            loadCampaigns();
         }
 
         function renderOptimizationResult(data) {
