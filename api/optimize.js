@@ -276,7 +276,11 @@ Return JSON only, no markdown:
     let aiAnalysis;
     try {
       const text = response.content[0].text;
-      const cleaned = text.replace(/^```(?:json)?\s*\n?/gm, '').replace(/\n?\s*```\s*$/gm, '').trim();
+      // Extract JSON from markdown code fences or raw text
+      let cleaned = text;
+      const jsonMatch = text.match(/```(?:json)?\s*\n?([\s\S]*?)\n?\s*```/);
+      if (jsonMatch) cleaned = jsonMatch[1].trim();
+      else cleaned = text.trim();
       aiAnalysis = JSON.parse(cleaned);
     } catch (e) {
       aiAnalysis = {
