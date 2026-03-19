@@ -724,19 +724,60 @@
             margin-bottom: 16px;
         }
         .opt-summary strong { color: #162831; }
+        .budget-impact {
+            background: #162831;
+            color: #fff;
+            border-radius: 8px;
+            padding: 14px 18px;
+            margin-bottom: 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        .budget-impact .bi-item {
+            text-align: center;
+        }
+        .budget-impact .bi-val {
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: 20px;
+            letter-spacing: 0.5px;
+        }
+        .budget-impact .bi-val.bi-increase { color: #FB041C; }
+        .budget-impact .bi-val.bi-neutral { color: #8a9bab; }
+        .budget-impact .bi-lbl {
+            font-size: 9px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: #8a9bab;
+            margin-top: 2px;
+        }
         .rec-card {
             background: #F7F8FA;
             border: 1px solid #E0E4E8;
             border-radius: 8px;
             padding: 14px 16px;
             margin-bottom: 8px;
+            transition: opacity 0.2s;
+        }
+        .rec-card.excluded {
+            opacity: 0.35;
         }
         .rec-card .rec-top {
             display: flex;
-            justify-content: space-between;
             align-items: center;
-            margin-bottom: 6px;
+            cursor: pointer;
+            user-select: none;
         }
+        .rec-card .rec-chevron {
+            font-size: 10px;
+            color: #8a9bab;
+            margin-right: 8px;
+            transition: transform 0.2s;
+            flex-shrink: 0;
+        }
+        .rec-card.expanded .rec-chevron { transform: rotate(90deg); }
         .rec-card .rec-name {
             font-weight: 600;
             font-size: 13px;
@@ -747,6 +788,11 @@
             white-space: nowrap;
             margin-right: 8px;
         }
+        .rec-card .rec-body {
+            display: none;
+            padding-top: 8px;
+        }
+        .rec-card.expanded .rec-body { display: block; }
         .rec-card .rec-reason {
             font-size: 12px;
             color: #52657F;
@@ -762,6 +808,18 @@
             color: #8a9bab;
             margin-right: 6px;
         }
+        .rec-exclude {
+            background: none;
+            border: none;
+            color: #8a9bab;
+            cursor: pointer;
+            font-size: 14px;
+            padding: 2px 6px;
+            margin-left: 6px;
+            border-radius: 4px;
+            flex-shrink: 0;
+        }
+        .rec-exclude:hover { background: rgba(251,4,28,0.08); color: #FB041C; }
         .badge-scale { background: rgba(10,143,111,0.12); color: #0a8f6f; }
         .badge-extend { background: rgba(124,92,191,0.12); color: #7c5cbf; }
         .badge-ab_test { background: rgba(59,130,246,0.12); color: #2563EB; }
@@ -884,7 +942,7 @@
         </div>
         <div class="stats">
             <div>
-                <div class="stat-label">Campaigns Live</div>
+                <div class="stat-label">Campaigns Delivering</div>
                 <div class="stat-value" id="stat-live">--</div>
             </div>
             <div>
@@ -1017,7 +1075,7 @@
 
             <!-- Portfolio Score -->
             <div class="panel">
-                <h2><div class="dot"></div> Portfolio Performance</h2>
+                <h2><div class="dot"></div> Portfolio Performance <span style="font-size:0.55em;font-weight:400;color:#888;">(delivering campaigns only)</span></h2>
                 <div id="portfolio-score">
                     <div class="portfolio-grid">
                         <div class="metric"><div class="val" id="ps-spend">--</div><div class="lbl">Total Spend</div></div>
@@ -1038,6 +1096,7 @@
                     <h2 style="margin-bottom:0;"><span class="ai-badge">AI</span> Recommendations</h2>
                     <button class="btn-run-opt" id="btn-execute-all" onclick="executeOptimization()" style="width:auto;padding:8px 20px;font-size:14px;">Execute All</button>
                 </div>
+                <div id="budget-impact" style="display:none;"></div>
                 <div id="opt-advice" style="display:none;margin-bottom:16px;"></div>
                 <div id="opt-recs-list"></div>
             </div>
@@ -1825,6 +1884,7 @@
                 const res = await fetch(`${API}/api/optimize?dry_run=true`);
                 const data = await res.json();
                 lastOptData = data;
+                excludedRecs = new Set();
                 renderOptimizationResult(data);
                 // Save to history
                 const history = JSON.parse(localStorage.getItem('pgmn_opt_history') || '[]');
@@ -1843,7 +1903,7 @@
         async function executeOptimization() {
             if (!lastOptData) { showToast('Run analysis first', true); return; }
             const recs = (lastOptData.ai_analysis || {}).recommendations || [];
-            const actionable = recs.filter(r => r.action === 'SCALE' || r.action === 'EXTEND');
+            const actionable = recs.filter((r, i) => !excludedRecs.has(i) && (r.action === 'SCALE' || r.action === 'EXTEND'));
             if (!actionable.length) { showToast('No SCALE or EXTEND actions to execute'); return; }
 
             const btn = document.getElementById('btn-execute-all');
@@ -1916,25 +1976,88 @@
             const recs = ai.recommendations || [];
             const recsPanel = document.getElementById('opt-recs-panel');
             const recsList = document.getElementById('opt-recs-list');
+
+            // Store campaign map for budget calculations
+            window._optCampMap = {};
+            for (const c of (data.campaigns || [])) {
+                window._optCampMap[c.campaign_id] = c;
+            }
+
             if (recs.length) {
                 recsPanel.style.display = 'block';
-                recsList.innerHTML = recs.map(r => {
+                recsList.innerHTML = recs.map((r, i) => {
                     const badgeClass = 'badge-' + (r.action || '').toLowerCase();
                     let detail = '';
                     if (r.new_budget) detail = `→ budget: ₱${formatNum(r.new_budget)}`;
                     if (r.new_end_date) detail = `→ extend to: ${r.new_end_date}`;
                     if (r.ab_test_type) detail = `→ A/B test: ${r.ab_test_type}`;
-                    return `<div class="rec-card">
-                        <div class="rec-top">
+                    return `<div class="rec-card" data-rec-idx="${i}" id="rec-${i}">
+                        <div class="rec-top" onclick="toggleRecCard(${i})">
+                            <span class="rec-chevron">&#9654;</span>
                             <div class="rec-name">${r.campaign_name || 'Unknown'}</div>
                             <span class="rec-perf">${r.current_performance || ''}</span>
                             <span class="opt-action-badge ${badgeClass}">${r.action}</span>
+                            <button class="rec-exclude" onclick="event.stopPropagation();toggleExcludeRec(${i})" title="Exclude from Execute All">&times;</button>
                         </div>
-                        <div class="rec-reason">${r.reason || ''}</div>
-                        ${detail ? `<div class="rec-detail">${detail}</div>` : ''}
+                        <div class="rec-body">
+                            <div class="rec-reason">${r.reason || ''}</div>
+                            ${detail ? `<div class="rec-detail">${detail}</div>` : ''}
+                        </div>
                     </div>`;
                 }).join('');
+                updateBudgetImpact();
+            } else {
+                document.getElementById('budget-impact').style.display = 'none';
             }
+        }
+
+        function toggleRecCard(idx) {
+            document.getElementById('rec-' + idx).classList.toggle('expanded');
+        }
+
+        // Track excluded recommendations
+        let excludedRecs = new Set();
+
+        function toggleExcludeRec(idx) {
+            const card = document.getElementById('rec-' + idx);
+            if (excludedRecs.has(idx)) {
+                excludedRecs.delete(idx);
+                card.classList.remove('excluded');
+            } else {
+                excludedRecs.add(idx);
+                card.classList.add('excluded');
+            }
+            updateBudgetImpact();
+        }
+
+        function updateBudgetImpact() {
+            const recs = (lastOptData?.ai_analysis?.recommendations) || [];
+            const biEl = document.getElementById('budget-impact');
+            if (!recs.length) { biEl.style.display = 'none'; return; }
+            let scaleCount = 0, extendCount = 0, abCount = 0, maintainCount = 0;
+            let totalBudgetIncrease = 0;
+            recs.forEach((r, i) => {
+                if (excludedRecs.has(i)) return;
+                if (r.action === 'SCALE') scaleCount++;
+                else if (r.action === 'EXTEND') extendCount++;
+                else if (r.action === 'AB_TEST') abCount++;
+                else maintainCount++;
+                if (r.action === 'SCALE' && r.new_budget) {
+                    const camp = window._optCampMap[r.campaign_id];
+                    const currentBudget = camp ? (camp.total_budget || 0) : 0;
+                    totalBudgetIncrease += Math.max(0, r.new_budget - currentBudget);
+                }
+            });
+            const included = recs.length - excludedRecs.size;
+            biEl.className = 'budget-impact';
+            biEl.style.display = 'flex';
+            biEl.innerHTML = `
+                <div class="bi-item"><div class="bi-val bi-increase">+₱${formatNum(totalBudgetIncrease)}</div><div class="bi-lbl">Execute All Cost</div></div>
+                <div class="bi-item"><div class="bi-val" style="color:#0a8f6f;">${scaleCount}</div><div class="bi-lbl">Scale</div></div>
+                <div class="bi-item"><div class="bi-val" style="color:#7c5cbf;">${extendCount}</div><div class="bi-lbl">Extend</div></div>
+                <div class="bi-item"><div class="bi-val" style="color:#e6a817;">${abCount}</div><div class="bi-lbl">A/B Test</div></div>
+                <div class="bi-item"><div class="bi-val bi-neutral">${included}/${recs.length}</div><div class="bi-lbl">Included</div></div>
+            `;
         }
 
         function renderHistory() {
