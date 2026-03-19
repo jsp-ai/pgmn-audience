@@ -55,11 +55,16 @@ module.exports = async function handler(req, res) {
     ].join(',');
 
     const campaignData = [];
+    const debugErrors = [];
     for (const camp of campaigns) {
       try {
         const result = await metaGet(`${camp.id}/insights`, {
-          fields: insightFields, date_preset: 'lifetime'
+          fields: insightFields, date_preset: 'maximum'
         });
+        if (result.error) {
+          debugErrors.push({ campaign: camp.name, error: result.error.message || result.error });
+          continue;
+        }
         if (result.data && result.data[0]) {
           const metrics = calculateMetrics(result.data[0]);
           const contentType = classifyContent(metrics.campaign_name || '');
@@ -153,6 +158,8 @@ module.exports = async function handler(req, res) {
     if (!campaignData.length) {
       return res.status(200).json({
         campaigns: [],
+        meta_campaigns_found: campaigns.length,
+        debug_errors: debugErrors,
         ai_analysis: { summary: 'Active campaigns found but no insight data yet.', recommendations: [] }
       });
     }
