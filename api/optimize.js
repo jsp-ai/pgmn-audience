@@ -240,7 +240,7 @@ PORTFOLIO THINKING:
 - Identify which campaigns are "carrying" the portfolio and which need audience adjustments
 - The 50% improvement target is on the TOTAL portfolio, not each individual campaign
 
-Return JSON only, no markdown:
+IMPORTANT: Keep all text fields concise (reason < 80 chars, projected_improvement < 60 chars). Return JSON only, no markdown:
 {
   "recommendations": [
     {
@@ -273,7 +273,7 @@ Return JSON only, no markdown:
 
     const response = await client.messages.create({
       model: 'claude-sonnet-4-6',
-      max_tokens: 8000,
+      max_tokens: 16000,
       messages: [{ role: 'user', content: prompt }]
     });
 
