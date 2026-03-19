@@ -276,19 +276,12 @@ Return JSON only, no markdown:
     let aiAnalysis;
     try {
       const text = response.content[0].text;
-      // Extract JSON from markdown code fences or raw text
-      let cleaned = text.trim();
-      const jsonMatch = cleaned.match(/```(?:json)?\s*\n([\s\S]*?)\n\s*```/);
-      if (jsonMatch) {
-        cleaned = jsonMatch[1].trim();
-      } else {
-        // Try to find the first { and last } for raw JSON
-        const firstBrace = cleaned.indexOf('{');
-        const lastBrace = cleaned.lastIndexOf('}');
-        if (firstBrace !== -1 && lastBrace > firstBrace) {
-          cleaned = cleaned.substring(firstBrace, lastBrace + 1);
-        }
-      }
+      // Extract JSON: find the outermost { ... } regardless of code fences
+      const firstBrace = text.indexOf('{');
+      const lastBrace = text.lastIndexOf('}');
+      const cleaned = (firstBrace !== -1 && lastBrace > firstBrace)
+        ? text.substring(firstBrace, lastBrace + 1)
+        : text.trim();
       aiAnalysis = JSON.parse(cleaned);
     } catch (e) {
       aiAnalysis = {
