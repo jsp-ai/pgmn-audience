@@ -1,5 +1,5 @@
 const { metaGet, metaPost, AD_ACCOUNT_ID } = require('../lib/meta');
-const { googleAdsQuery, isGoogleAdsConfigured, formatDateForGoogle } = require('../lib/google');
+const { googleAdsQuery, googleAdsMutate, isGoogleAdsConfigured, formatDateForGoogle, GOOGLE_ADS_CUSTOMER_ID } = require('../lib/google');
 
 // Simple in-memory cache (persists across warm Vercel invocations)
 let campaignCache = { data: null, ts: 0 };
@@ -11,13 +11,120 @@ module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   if (req.method === 'OPTIONS') return res.status(200).end();
 
-  // POST: update campaign status (pause/activate/archive)
+  // POST: update campaign (status, budget, extension) for Meta or Google Ads
   if (req.method === 'POST') {
     try {
-      const { campaign_id, action } = req.body;
-      const statusMap = { pause: 'PAUSED', activate: 'ACTIVE', archive: 'ARCHIVED' };
-      const data = await metaPost(campaign_id, { status: statusMap[action] || action });
-      return res.status(200).json(data);
+      const { campaign_id, action, platform, lifetime_budget, new_end_date } = req.body;
+      const isGoogle = platform === 'google_ads';
+
+      // --- STATUS CHANGES (pause/activate/archive) ---
+      if (action === 'pause' || action === 'activate' || action === 'archive') {
+        if (isGoogle) {
+          const statusMap = { pause: 'PAUSED', activate: 'ENABLED' };
+          const googleStatus = statusMap[action];
+          if (!googleStatus) return res.status(400).json({ error: 'Google Ads does not support archive' });
+          const result = await googleAdsMutate([{
+            campaignOperation: {
+              update: {
+                resourceName: `customers/${GOOGLE_ADS_CUSTOMER_ID}/campaigns/${campaign_id}`,
+                status: googleStatus,
+              },
+              updateMask: 'status',
+            }
+          }]);
+          return res.status(200).json({ success: true, platform: 'google_ads', action, result });
+        } else {
+          const statusMap = { pause: 'PAUSED', activate: 'ACTIVE', archive: 'ARCHIVED' };
+          const data = await metaPost(campaign_id, { status: statusMap[action] || action });
+          return res.status(200).json(data);
+        }
+      }
+
+      // --- BUDGET UPDATE ---
+      if (action === 'update_budget') {
+        if (!lifetime_budget) return res.status(400).json({ error: 'lifetime_budget is required (in PHP)' });
+
+        if (isGoogle) {
+          // Google Ads: find the budget resource, then update amountMicros
+          const budgetQuery = await googleAdsQuery(
+            `SELECT campaign_budget.resource_name, campaign_budget.amount_micros FROM campaign_budget WHERE campaign.id = ${campaign_id}`
+          );
+          let budgetResource = null;
+          if (Array.isArray(budgetQuery)) {
+            for (const batch of budgetQuery) {
+              for (const row of (batch.results || [])) {
+                budgetResource = row.campaignBudget?.resourceName;
+              }
+            }
+          }
+          if (!budgetResource) return res.status(404).json({ error: 'Budget resource not found for campaign' });
+          const result = await googleAdsMutate([{
+            campaignBudgetOperation: {
+              update: {
+                resourceName: budgetResource,
+                amountMicros: String(Math.round(lifetime_budget * 1000000)),
+              },
+              updateMask: 'amount_micros',
+            }
+          }]);
+          return res.status(200).json({ success: true, platform: 'google_ads', action, new_budget: lifetime_budget, result });
+        } else {
+          // Meta: update lifetime_budget on each adset (campaigns use adset-level budgets)
+          const adsets = await metaGet(`${AD_ACCOUNT_ID}/adsets`, {
+            fields: 'id,lifetime_budget',
+            filtering: JSON.stringify([{ field: 'campaign.id', operator: 'IN', value: [campaign_id] }]),
+            limit: '50'
+          });
+          const adsetList = adsets.data || [];
+          if (!adsetList.length) return res.status(404).json({ error: 'No adsets found for campaign' });
+
+          // Distribute budget proportionally across adsets
+          const currentTotal = adsetList.reduce((sum, as) => sum + (parseInt(as.lifetime_budget || '0') / 100), 0);
+          const results = [];
+          for (const as of adsetList) {
+            const currentBudget = parseInt(as.lifetime_budget || '0') / 100;
+            const ratio = currentTotal > 0 ? currentBudget / currentTotal : 1 / adsetList.length;
+            const newBudget = Math.round(lifetime_budget * ratio * 100); // centavos
+            const r = await metaPost(as.id, { lifetime_budget: String(newBudget) });
+            results.push({ adset_id: as.id, new_budget_php: newBudget / 100, result: r });
+          }
+          return res.status(200).json({ success: true, platform: 'meta', action, new_budget: lifetime_budget, adsets: results });
+        }
+      }
+
+      // --- EXTEND CAMPAIGN ---
+      if (action === 'extend') {
+        if (!new_end_date) return res.status(400).json({ error: 'new_end_date is required (YYYY-MM-DD)' });
+
+        if (isGoogle) {
+          const result = await googleAdsMutate([{
+            campaignOperation: {
+              update: {
+                resourceName: `customers/${GOOGLE_ADS_CUSTOMER_ID}/campaigns/${campaign_id}`,
+                endDate: new_end_date,
+              },
+              updateMask: 'end_date',
+            }
+          }]);
+          return res.status(200).json({ success: true, platform: 'google_ads', action, new_end_date, result });
+        } else {
+          // Meta: update end_time on each adset
+          const newEndTime = new Date(new_end_date + 'T23:59:59+0800').toISOString();
+          const adsets = await metaGet(`${AD_ACCOUNT_ID}/adsets`, {
+            fields: 'id,end_time',
+            filtering: JSON.stringify([{ field: 'campaign.id', operator: 'IN', value: [campaign_id] }]),
+            limit: '50'
+          });
+          const results = [];
+          for (const as of (adsets.data || [])) {
+            const r = await metaPost(as.id, { end_time: newEndTime });
+            results.push({ adset_id: as.id, new_end_time: newEndTime, result: r });
+          }
+          return res.status(200).json({ success: true, platform: 'meta', action, new_end_date, adsets: results });
+        }
+      }
+
+      return res.status(400).json({ error: `Unknown action: ${action}` });
     } catch (err) {
       return res.status(500).json({ error: err.message });
     }

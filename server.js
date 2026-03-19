@@ -1022,8 +1022,19 @@ const server = http.createServer(async (req, res) => {
       return sendJSON(res, await getPagePosts());
     }
     if (pathname === '/api/campaigns' && req.method === 'POST') {
+      const campaignsHandler = require('./api/campaigns');
       const body = await parseBody(req);
-      return sendJSON(res, await updateCampaignStatus(body.campaign_id, body.action));
+      const fakeReq = { method: 'POST', body, headers: req.headers, query: {} };
+      const fakeRes = {
+        statusCode: 200,
+        _headers: {},
+        setHeader(k, v) { this._headers[k] = v; },
+        status(code) { this.statusCode = code; return this; },
+        json(data) { sendJSON(res, data, this.statusCode); },
+        end(data) { res.writeHead(this.statusCode, this._headers); res.end(data); },
+        writeHead(code, headers) { res.writeHead(code, headers); },
+      };
+      return campaignsHandler(fakeReq, fakeRes);
     }
     if (pathname === '/api/launch' && req.method === 'POST') {
       const launch = require('./api/launch');

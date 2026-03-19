@@ -1,5 +1,6 @@
 const Anthropic = require('@anthropic-ai/sdk');
 const { metaGet, metaPost, calculateMetrics, AD_ACCOUNT_ID } = require('../lib/meta');
+const { googleAdsQuery, isGoogleAdsConfigured, formatDateForGoogle } = require('../lib/google');
 
 const BENCHMARKS = {
   reel: { eng_per_peso: 38.5 },
@@ -76,6 +77,49 @@ module.exports = async function handler(req, res) {
       }
     }
 
+    // 2b. Add Google Ads campaigns (if configured)
+    if (isGoogleAdsConfigured()) {
+      try {
+        const today = formatDateForGoogle(new Date());
+        const gResult = await googleAdsQuery(
+          `SELECT campaign.id, campaign.name, campaign.status, campaign.start_date, campaign.end_date, ` +
+          `campaign_budget.amount_micros, metrics.cost_micros, metrics.impressions, metrics.clicks, metrics.conversions ` +
+          `FROM campaign WHERE campaign.status = 'ENABLED' AND campaign.end_date >= '${today}' LIMIT 50`
+        );
+        if (Array.isArray(gResult)) {
+          for (const batch of gResult) {
+            for (const row of (batch.results || [])) {
+              const c = row.campaign || {};
+              const budget = row.campaignBudget || {};
+              const m = row.metrics || {};
+              const budgetPhp = parseInt(budget.amountMicros || '0') / 1000000;
+              const spentPhp = parseInt(m.costMicros || '0') / 1000000;
+              const impressions = parseInt(m.impressions || '0');
+              const clicks = parseInt(m.clicks || '0');
+              campaignData.push({
+                campaign_id: c.id,
+                campaign_name: c.name || `Google Campaign ${c.id}`,
+                platform: 'google_ads',
+                spend: spentPhp,
+                total_budget: budgetPhp,
+                impressions,
+                reach: 0,
+                clicks,
+                ctr: impressions > 0 ? (clicks / impressions * 100).toFixed(2) + '%' : '0%',
+                cost_per_click: clicks > 0 ? Math.round(spentPhp / clicks * 100) / 100 : 0,
+                eng_per_peso: 0, // not applicable for Google Ads
+                content_type: 'youtube_video',
+                benchmark_eng_per_peso: null,
+                performance_vs_benchmark: null,
+                start_time: c.startDate || null,
+                stop_time: c.endDate || null,
+              });
+            }
+          }
+        }
+      } catch (e) { /* Google Ads query failed, continue with Meta-only */ }
+    }
+
     if (!campaignData.length) {
       return res.status(200).json({
         campaigns: [],
@@ -86,11 +130,11 @@ module.exports = async function handler(req, res) {
     // 3. Send to Claude for analysis
     const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
-    const prompt = `You are PGMN's campaign optimization AI. Analyze these active Meta ad campaigns and provide specific, actionable recommendations.
+    const prompt = `You are PGMN's campaign optimization AI. Analyze these active ad campaigns across Meta and Google Ads, and provide specific, actionable recommendations.
 
 PGMN is a Philippine media/news network. Budget is 200,000 PHP/month. Strategy is "burst fire" — quick campaigns that maximize virality and engagement.
 
-HISTORICAL BENCHMARKS (Feb-Mar 2026):
+HISTORICAL BENCHMARKS (Feb-Mar 2026) — Meta campaigns:
 - Reels: 38.5 eng/PHP (best performer)
 - Trailers: 33.1 eng/PHP
 - Full Episodes: 32.9 eng/PHP
@@ -107,24 +151,29 @@ KEY INSIGHTS:
 - Political/controversial content gets highest virality (shares+comments)
 - Video content (reels, trailers, episodes) massively outperforms static
 
+PLATFORM-SPECIFIC EVALUATION:
+- Meta campaigns: Use eng_per_peso (engagements / spend) vs benchmarks above
+- Google Ads campaigns: Use CTR and cost_per_click (no engagement metric). Good CTR > 2%, good CPC < 5 PHP
+
+GUARDRAILS (you MUST respect these):
+- Do NOT recommend KILL for campaigns less than 48 hours old (check start_time)
+- Do NOT recommend KILL for campaigns with less than 100 PHP spent
+- SCALE: max increase is 50% of current budget or 3,000 PHP, whichever is smaller. Total must not exceed 10,000 PHP.
+- EXTEND: max 3 additional days. Total campaign duration must not exceed 7 days.
+
 ACTIVE CAMPAIGNS:
 ${JSON.stringify(campaignData, null, 2)}
 
 For each campaign, recommend one of:
-- SCALE: Increase budget (specify amount) — performing above benchmark
+- SCALE: Increase budget (specify new_budget in PHP) — performing above benchmark
 - MAINTAIN: Keep running as-is — performing at benchmark
 - KILL: Pause immediately — underperforming significantly
-- EXTEND: Add more days — performing well but ending soon
-
-Also provide:
-1. An overall budget reallocation strategy
-2. Content recommendations (what types to create more of)
-3. One specific A/B test suggestion
+- EXTEND: Add more days (specify new_end_date as YYYY-MM-DD) — performing well but ending soon
 
 Return your response as JSON only, no markdown:
 {
   "recommendations": [
-    {"campaign_id": "...", "campaign_name": "...", "action": "SCALE|MAINTAIN|KILL|EXTEND", "reason": "...", "new_budget": null}
+    {"campaign_id": "...", "campaign_name": "...", "platform": "meta|google_ads", "action": "SCALE|MAINTAIN|KILL|EXTEND", "reason": "...", "new_budget": null, "new_end_date": null}
   ],
   "budget_strategy": "...",
   "content_advice": "...",
@@ -155,10 +204,98 @@ Return your response as JSON only, no markdown:
     // 4. Execute actions if not dry run
     const actionsTaken = [];
     if (!dryRun) {
+      const https = require('https');
+      const BASE_URL = process.env.VERCEL_URL
+        ? `https://${process.env.VERCEL_URL}`
+        : 'https://pgmn-audience.vercel.app';
+
       for (const rec of (aiAnalysis.recommendations || [])) {
-        if (rec.action === 'KILL' && rec.campaign_id) {
-          await metaPost(rec.campaign_id, { status: 'PAUSED' });
-          actionsTaken.push(`PAUSED: ${rec.campaign_name}`);
+        if (!rec.campaign_id) continue;
+        const platform = rec.platform || 'meta';
+
+        try {
+          if (rec.action === 'KILL') {
+            if (platform === 'google_ads') {
+              const { googleAdsMutate, GOOGLE_ADS_CUSTOMER_ID } = require('../lib/google');
+              await googleAdsMutate([{
+                campaignOperation: {
+                  update: {
+                    resourceName: `customers/${GOOGLE_ADS_CUSTOMER_ID}/campaigns/${rec.campaign_id}`,
+                    status: 'PAUSED',
+                  },
+                  updateMask: 'status',
+                }
+              }]);
+            } else {
+              await metaPost(rec.campaign_id, { status: 'PAUSED' });
+            }
+            actionsTaken.push({ action: 'KILL', campaign: rec.campaign_name, platform });
+
+          } else if (rec.action === 'SCALE' && rec.new_budget) {
+            if (platform === 'meta') {
+              // Update adset-level budgets proportionally
+              const adsets = await metaGet(`${AD_ACCOUNT_ID}/adsets`, {
+                fields: 'id,lifetime_budget',
+                filtering: JSON.stringify([{ field: 'campaign.id', operator: 'IN', value: [rec.campaign_id] }]),
+                limit: '50'
+              });
+              const adsetList = adsets.data || [];
+              const currentTotal = adsetList.reduce((sum, as) => sum + (parseInt(as.lifetime_budget || '0') / 100), 0);
+              for (const as of adsetList) {
+                const currentBudget = parseInt(as.lifetime_budget || '0') / 100;
+                const ratio = currentTotal > 0 ? currentBudget / currentTotal : 1 / adsetList.length;
+                const newBudget = Math.round(rec.new_budget * ratio * 100); // centavos
+                await metaPost(as.id, { lifetime_budget: String(newBudget) });
+              }
+            } else {
+              const { googleAdsQuery: gQuery, googleAdsMutate: gMutate } = require('../lib/google');
+              const budgetQ = await gQuery(
+                `SELECT campaign_budget.resource_name FROM campaign_budget WHERE campaign.id = ${rec.campaign_id}`
+              );
+              let budgetRes = null;
+              if (Array.isArray(budgetQ)) {
+                for (const batch of budgetQ) {
+                  for (const row of (batch.results || [])) budgetRes = row.campaignBudget?.resourceName;
+                }
+              }
+              if (budgetRes) {
+                await gMutate([{
+                  campaignBudgetOperation: {
+                    update: { resourceName: budgetRes, amountMicros: String(Math.round(rec.new_budget * 1000000)) },
+                    updateMask: 'amount_micros',
+                  }
+                }]);
+              }
+            }
+            actionsTaken.push({ action: 'SCALE', campaign: rec.campaign_name, platform, new_budget: rec.new_budget });
+
+          } else if (rec.action === 'EXTEND' && rec.new_end_date) {
+            if (platform === 'meta') {
+              const newEndTime = new Date(rec.new_end_date + 'T23:59:59+0800').toISOString();
+              const adsets = await metaGet(`${AD_ACCOUNT_ID}/adsets`, {
+                fields: 'id,end_time',
+                filtering: JSON.stringify([{ field: 'campaign.id', operator: 'IN', value: [rec.campaign_id] }]),
+                limit: '50'
+              });
+              for (const as of (adsets.data || [])) {
+                await metaPost(as.id, { end_time: newEndTime });
+              }
+            } else {
+              const { googleAdsMutate: gMutate, GOOGLE_ADS_CUSTOMER_ID: custId } = require('../lib/google');
+              await gMutate([{
+                campaignOperation: {
+                  update: {
+                    resourceName: `customers/${custId}/campaigns/${rec.campaign_id}`,
+                    endDate: rec.new_end_date,
+                  },
+                  updateMask: 'end_date',
+                }
+              }]);
+            }
+            actionsTaken.push({ action: 'EXTEND', campaign: rec.campaign_name, platform, new_end_date: rec.new_end_date });
+          }
+        } catch (e) {
+          actionsTaken.push({ action: rec.action, campaign: rec.campaign_name, platform, error: e.message });
         }
       }
     }
