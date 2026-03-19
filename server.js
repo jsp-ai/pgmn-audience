@@ -25,6 +25,8 @@ const AD_ACCOUNT_ID = env.META_AD_ACCOUNT_ID;
 const API_VERSION = env.META_API_VERSION || 'v25.0';
 const BASE = `https://graph.facebook.com/${API_VERSION}`;
 
+const { googleAdsQuery, isGoogleAdsConfigured, formatDateForGoogle } = require('./lib/google');
+
 // ─── Meta API helpers ───
 
 function metaGet(endpoint, params = {}) {
@@ -218,6 +220,39 @@ async function getCampaigns(limit = 30) {
     if (c.total_budget && spent >= c.total_budget) return false;
     return true;
   });
+  // --- Google Ads campaigns ---
+  if (isGoogleAdsConfigured()) {
+    try {
+      const gToday = formatDateForGoogle(new Date());
+      const gResult = await googleAdsQuery(
+        `SELECT campaign.id, campaign.name, campaign.status, campaign.start_date, campaign.end_date, ` +
+        `campaign_budget.amount_micros, metrics.cost_micros, metrics.impressions, metrics.clicks ` +
+        `FROM campaign WHERE campaign.status != 'REMOVED' ORDER BY campaign.start_date DESC LIMIT 30`
+      );
+      if (Array.isArray(gResult)) {
+        for (const batch of gResult) {
+          for (const row of (batch.results || [])) {
+            const gc = row.campaign || {};
+            const budget = row.campaignBudget || {};
+            const m = row.metrics || {};
+            const budgetPhp = parseInt(budget.amountMicros || '0') / 1000000;
+            const spentPhp = parseInt(m.costMicros || '0') / 1000000;
+            if (gc.endDate && gc.endDate < gToday) continue;
+            if (budgetPhp > 0 && spentPhp >= budgetPhp) continue;
+            enriched.push({
+              id: gc.id, name: gc.name,
+              status: gc.status === 'ENABLED' ? 'ACTIVE' : gc.status === 'PAUSED' ? 'PAUSED' : gc.status,
+              objective: 'DEMAND_GEN', start_time: gc.startDate || null, stop_time: gc.endDate || null,
+              platform: 'google_ads', total_budget: budgetPhp || null,
+              insights: { spend: spentPhp, impressions: parseInt(m.impressions || '0'), reach: 0,
+                clicks: parseInt(m.clicks || '0'), engagements: 0, video_views: 0, eng_per_peso: 0 },
+            });
+          }
+        }
+      }
+    } catch (e) { /* Google Ads failed, continue */ }
+  }
+
   const result = { data: enriched, paging: campaigns.paging };
   setCache('campaigns', result);
   return result;
@@ -303,10 +338,25 @@ async function getStats() {
   const monthSpend = monthInsights.data && monthInsights.data[0]
     ? parseFloat(monthInsights.data[0].spend || 0) : 0;
 
+  // --- Google Ads stats ---
+  let gAdsActiveCount = 0, gAdsTodaySpend = 0, gAdsMonthSpend = 0;
+  if (isGoogleAdsConfigured()) {
+    try {
+      const gToday = formatDateForGoogle(new Date());
+      const gMonthStart = gToday.substring(0, 8) + '01';
+      const activeR = await googleAdsQuery(`SELECT campaign.id FROM campaign WHERE campaign.status = 'ENABLED' AND campaign.end_date >= '${gToday}'`);
+      if (Array.isArray(activeR)) for (const b of activeR) gAdsActiveCount += (b.results || []).length;
+      const todayR = await googleAdsQuery(`SELECT metrics.cost_micros FROM customer WHERE segments.date = '${gToday}'`);
+      if (Array.isArray(todayR)) for (const b of todayR) for (const r of (b.results || [])) gAdsTodaySpend += parseInt(r.metrics?.costMicros || '0') / 1000000;
+      const monthR = await googleAdsQuery(`SELECT metrics.cost_micros FROM customer WHERE segments.date >= '${gMonthStart}' AND segments.date <= '${gToday}'`);
+      if (Array.isArray(monthR)) for (const b of monthR) for (const r of (b.results || [])) gAdsMonthSpend += parseInt(r.metrics?.costMicros || '0') / 1000000;
+    } catch (e) { /* Google Ads failed, continue */ }
+  }
+
   const statsResult = {
-    active_count: activeCount,
-    total_daily_spend: Math.round(todaySpend * 100) / 100,
-    total_monthly_spend: Math.round(monthSpend * 100) / 100
+    active_count: activeCount + gAdsActiveCount,
+    total_daily_spend: Math.round((todaySpend + gAdsTodaySpend) * 100) / 100,
+    total_monthly_spend: Math.round((monthSpend + gAdsMonthSpend) * 100) / 100
   };
   setCache('stats', statsResult);
   return statsResult;
@@ -936,14 +986,6 @@ const server = http.createServer(async (req, res) => {
     if (pathname === '/api/stats' && req.method === 'GET') {
       return sendJSON(res, await getStats());
     }
-    if (pathname === '/api/launch' && req.method === 'POST') {
-      const body = await parseBody(req);
-      const result = await launchCampaign(body);
-      if (result.error) {
-        return sendJSON(res, { status: 'partial_failure', error: result.error, data: result.data }, 400);
-      }
-      return sendJSON(res, { status: 'created', data: result });
-    }
     if (pathname === '/api/geo-search' && req.method === 'GET') {
       const q = parsed.query?.q || '';
       if (q.length < 2) return sendJSON(res, { error: 'Query must be at least 2 characters' }, 400);
@@ -961,38 +1003,30 @@ const server = http.createServer(async (req, res) => {
       }));
       return sendJSON(res, { data });
     }
-    if (pathname === '/api/resolve-post' && req.method === 'GET') {
-      const postUrl = parsed.query?.url;
-      if (!postUrl) return sendJSON(res, { error: 'url parameter required' }, 400);
-      return sendJSON(res, await resolvePost(postUrl));
-    }
-    if (pathname === '/api/posts' && req.method === 'GET') {
-      if (parsed.query?.nocache === '1') delete cache['posts'];
-      return sendJSON(res, await getPagePosts());
-    }
-    if (pathname === '/api/campaigns/status' && req.method === 'POST') {
-      const body = await parseBody(req);
-      return sendJSON(res, await updateCampaignStatus(body.campaign_id, body.action));
-    }
-
-    // --- YouTube routes (delegate to Vercel-style serverless handlers) ---
-    if (pathname === '/api/resolve-youtube' && req.method === 'GET') {
-      const resolveYouTube = require('./api/resolve-youtube');
-      const fakeReq = { method: 'GET', query: parsed.query || {}, headers: req.headers };
+    if (pathname === '/api/resolve' && req.method === 'GET') {
+      const resolve = require('./api/resolve');
+      const fakeReq = { method: 'GET', query: parsed.query || {}, url: req.url, headers: req.headers };
       const fakeRes = {
         statusCode: 200,
         _headers: {},
-        _body: null,
         setHeader(k, v) { this._headers[k] = v; },
         status(code) { this.statusCode = code; return this; },
         json(data) { sendJSON(res, data, this.statusCode); },
         end(data) { res.writeHead(this.statusCode, this._headers); res.end(data); },
         writeHead(code, headers) { res.writeHead(code, headers); },
       };
-      return resolveYouTube(fakeReq, fakeRes);
+      return resolve(fakeReq, fakeRes);
     }
-    if (pathname === '/api/launch-youtube' && req.method === 'POST') {
-      const launchYouTube = require('./api/launch-youtube');
+    if (pathname === '/api/posts' && req.method === 'GET') {
+      if (parsed.query?.nocache === '1') delete cache['posts'];
+      return sendJSON(res, await getPagePosts());
+    }
+    if (pathname === '/api/campaigns' && req.method === 'POST') {
+      const body = await parseBody(req);
+      return sendJSON(res, await updateCampaignStatus(body.campaign_id, body.action));
+    }
+    if (pathname === '/api/launch' && req.method === 'POST') {
+      const launch = require('./api/launch');
       const body = await parseBody(req);
       const fakeReq = { method: 'POST', body, headers: req.headers };
       const fakeRes = {
@@ -1004,11 +1038,11 @@ const server = http.createServer(async (req, res) => {
         end(data) { res.writeHead(this.statusCode, this._headers); res.end(data); },
         writeHead(code, headers) { res.writeHead(code, headers); },
       };
-      return launchYouTube(fakeReq, fakeRes);
+      return launch(fakeReq, fakeRes);
     }
     if (pathname === '/api/google-oauth' && req.method === 'GET') {
       const googleOAuth = require('./api/google-oauth');
-      const fakeReq = { method: 'GET', headers: req.headers };
+      const fakeReq = { method: 'GET', query: parsed.query || {}, url: req.url, headers: req.headers };
       const fakeRes = {
         statusCode: 200,
         _headers: {},
@@ -1020,20 +1054,6 @@ const server = http.createServer(async (req, res) => {
         writeHead(code, headers) { if (!this._headersSent) { res.writeHead(code, headers); this._headersSent = true; } },
       };
       return googleOAuth(fakeReq, fakeRes);
-    }
-    if (pathname === '/api/google-oauth-callback' && req.method === 'GET') {
-      const googleCallback = require('./api/google-oauth-callback');
-      const fakeReq = { method: 'GET', query: parsed.query || {}, headers: req.headers };
-      const fakeRes = {
-        statusCode: 200,
-        _headers: {},
-        setHeader(k, v) { this._headers[k] = v; },
-        status(code) { this.statusCode = code; return this; },
-        json(data) { sendJSON(res, data, this.statusCode); },
-        end(data) { res.writeHead(this.statusCode, this._headers); res.end(data); },
-        writeHead(code, headers) { res.writeHead(code, headers); },
-      };
-      return googleCallback(fakeReq, fakeRes);
     }
 
     sendJSON(res, { error: 'Not found' }, 404);

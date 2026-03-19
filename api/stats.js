@@ -1,4 +1,5 @@
 const { metaGet, calculateMetrics, AD_ACCOUNT_ID } = require('../lib/meta');
+const { googleAdsQuery, isGoogleAdsConfigured, formatDateForGoogle } = require('../lib/google');
 
 let statsCache = { data: null, ts: 0 };
 const CACHE_TTL = 120000;
@@ -83,10 +84,56 @@ module.exports = async function handler(req, res) {
       ? parseFloat(monthInsights.data[0].spend || 0)
       : 0;
 
+    // --- Google Ads stats (if configured) ---
+    let gAdsActiveCount = 0;
+    let gAdsTodaySpend = 0;
+    let gAdsMonthSpend = 0;
+
+    if (isGoogleAdsConfigured()) {
+      try {
+        const today = formatDateForGoogle(new Date());
+        const monthStart = today.substring(0, 8) + '01';
+
+        // Active campaigns count
+        const activeResult = await googleAdsQuery(
+          `SELECT campaign.id FROM campaign WHERE campaign.status = 'ENABLED' AND campaign.end_date >= '${today}'`
+        );
+        if (Array.isArray(activeResult)) {
+          for (const batch of activeResult) {
+            gAdsActiveCount += (batch.results || []).length;
+          }
+        }
+
+        // Today's spend
+        const todayResult = await googleAdsQuery(
+          `SELECT metrics.cost_micros FROM customer WHERE segments.date = '${today}'`
+        );
+        if (Array.isArray(todayResult)) {
+          for (const batch of todayResult) {
+            for (const row of (batch.results || [])) {
+              gAdsTodaySpend += parseInt(row.metrics?.costMicros || '0') / 1000000;
+            }
+          }
+        }
+
+        // This month's spend
+        const monthResult = await googleAdsQuery(
+          `SELECT metrics.cost_micros FROM customer WHERE segments.date >= '${monthStart}' AND segments.date <= '${today}'`
+        );
+        if (Array.isArray(monthResult)) {
+          for (const batch of monthResult) {
+            for (const row of (batch.results || [])) {
+              gAdsMonthSpend += parseInt(row.metrics?.costMicros || '0') / 1000000;
+            }
+          }
+        }
+      } catch (e) { /* Google Ads query failed, continue with Meta-only stats */ }
+    }
+
     const result = {
-      active_count: activeCount,
-      total_daily_spend: Math.round(todaySpend * 100) / 100,
-      total_monthly_spend: Math.round(monthSpend * 100) / 100
+      active_count: activeCount + gAdsActiveCount,
+      total_daily_spend: Math.round((todaySpend + gAdsTodaySpend) * 100) / 100,
+      total_monthly_spend: Math.round((monthSpend + gAdsMonthSpend) * 100) / 100
     };
     statsCache = { data: result, ts: Date.now() };
     res.status(200).json(result);

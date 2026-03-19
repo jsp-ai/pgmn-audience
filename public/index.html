@@ -447,6 +447,7 @@
         }
         .preview-platform.plat-facebook { background: rgba(24,119,242,0.1); color: #1877F2; }
         .preview-platform.plat-instagram { background: rgba(225,48,108,0.1); color: #E1306C; }
+        .preview-platform.plat-youtube { background: rgba(196,48,43,0.1); color: #c4302b; }
         .post-preview .preview-caption {
             font-size: 12px;
             color: #3a4f5c;
@@ -722,11 +723,20 @@
                 <h2><div class="dot"></div> Launch Campaign</h2>
 
                 <label>Paste Post Link</label>
-                <input type="text" id="content-url" placeholder="https://facebook.com/pgmn/posts/... or https://instagram.com/p/..." oninput="previewFromUrl(this.value)" />
+                <input type="text" id="content-url" placeholder="https://facebook.com/.../posts/... or instagram.com/p/... or youtube.com/watch?v=..." oninput="previewFromUrl(this.value)" />
 
                 <input type="hidden" id="post-id" />
                 <div class="post-preview" id="post-preview"></div>
                 <div style="font-size:11px;color:#8a9bab;margin-top:6px;" id="post-id-display">Paste a post link above to preview</div>
+
+                <div id="yt-campaign-type" style="display:none; margin-top:12px;">
+                    <label>YouTube Campaign Goal</label>
+                    <div class="budget-grid" id="yt-type-selector">
+                        <div class="budget-btn active" data-type="views" onclick="selectYtType(this)">Video Views</div>
+                        <div class="budget-btn" data-type="subscribers" onclick="selectYtType(this)">Subscribers</div>
+                    </div>
+                    <div style="font-size:10px;color:#8a9bab;margin-top:3px;" id="yt-type-hint">Optimizes for video views via Demand Gen campaign</div>
+                </div>
 
                 <label>Campaign Name</label>
                 <input type="text" id="campaign-name" placeholder="Auto-generated from post & settings" />
@@ -904,7 +914,7 @@
                 return `
                     <div class="campaign-card">
                         <div class="top">
-                            <div class="name">${c.name}</div>
+                            <div class="name">${c.platform === 'google_ads' ? '<span style="background:#FF0000;color:#fff;font-size:10px;padding:2px 5px;border-radius:3px;margin-right:6px;font-weight:700;letter-spacing:0.5px">YT</span>' : ''}${c.name}</div>
                             <div style="display:flex;gap:6px;align-items:center;">
                                 ${badgeHtml}
                                 <span class="status ${statusClass}">${statusLabel}</span>
@@ -923,11 +933,14 @@
                             <div class="metric"><div class="val ${epClass}">${engPeso || '--'}</div><div class="lbl">Eng/PHP</div></div>
                         </div>
                         <div class="actions">
-                            ${c.status === 'ACTIVE' || isProcessing ?
-                                `<button onclick="updateStatus('${c.id}', 'pause')">Pause</button>` :
-                                `<button onclick="updateStatus('${c.id}', 'activate')">Activate</button>`
+                            ${c.platform === 'google_ads' ?
+                                `<a href="https://ads.google.com" target="_blank" style="color:#aaa;font-size:11px;text-decoration:none">Manage in Google Ads ↗</a>` :
+                                `${c.status === 'ACTIVE' || isProcessing ?
+                                    `<button onclick="updateStatus('${c.id}', 'pause')">Pause</button>` :
+                                    `<button onclick="updateStatus('${c.id}', 'activate')">Activate</button>`
+                                }
+                                <button class="danger" onclick="updateStatus('${c.id}', 'archive')">Archive</button>`
                             }
-                            <button class="danger" onclick="updateStatus('${c.id}', 'archive')">Archive</button>
                         </div>
                     </div>
                 `;
@@ -960,7 +973,9 @@
 
         function detectPlatform(url) {
             if (!url) return 'facebook_only';
-            return url.includes('instagram.com') ? 'instagram_only' : 'facebook_only';
+            if (url.includes('instagram.com')) return 'instagram_only';
+            if (url.includes('youtube.com') || url.includes('youtu.be')) return 'youtube';
+            return 'facebook_only';
         }
 
         function generateCampaignName(postCaption, budgetPhp, durationDays, platform) {
@@ -970,7 +985,7 @@
             // Format budget: 1000 → 1k, 500 → 500
             const budgetStr = budgetPhp >= 1000 ? (budgetPhp / 1000) + 'k' : String(budgetPhp);
             const durStr = durationDays === 1 ? '1 day' : durationDays + ' days';
-            const platStr = platform === 'instagram_only' ? 'Instagram' : 'Facebook';
+            const platStr = platform === 'instagram_only' ? 'Instagram' : platform === 'youtube' ? `YouTube ${getSelectedYtType() === 'subscribers' ? 'Subs' : 'Views'}` : 'Facebook';
             return `${desc} - ${budgetStr} ${durStr} - ${platStr}`;
         }
 
@@ -1017,6 +1032,59 @@
                 postId = extractPostIdFromUrl(contentUrl);
             }
 
+            // --- YouTube launch path ---
+            if (platform === 'youtube') {
+                const campaignName = document.getElementById('campaign-name').value.trim()
+                    || generateCampaignName(resolvedPost?.title || '', budgetPhp, durationDays, platform);
+
+                if (!resolvedPost || !resolvedPost.video_id) {
+                    showToast('Paste a valid YouTube URL to launch', true);
+                    btn.disabled = false;
+                    btn.textContent = 'Launch Campaign';
+                    return;
+                }
+
+                const ytCampaignType = getSelectedYtType();
+                const ytBody = {
+                    video_id: resolvedPost.video_id,
+                    video_title: resolvedPost.title || '',
+                    video_description: resolvedPost.description || '',
+                    thumbnail_url: resolvedPost.thumbnail || '',
+                    channel_id: resolvedPost.channel_id || '',
+                    channel_name: resolvedPost.channel || '',
+                    budget_php: budgetPhp,
+                    duration_days: durationDays,
+                    campaign_name: campaignName,
+                    countries,
+                    ab_test: abTest,
+                    campaign_type: ytCampaignType,
+                };
+
+                try {
+                    const res = await fetch(`${API}/api/launch`, {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify(ytBody)
+                    });
+                    const data = await res.json();
+
+                    if (data.status === 'success') {
+                        showToast(`YouTube ${ytCampaignType === 'subscribers' ? 'Subscribers' : 'Views'} campaign created! ${campaignName}`);
+                        document.getElementById('campaign-name').value = '';
+                        campaignNameManuallyEdited = false;
+                    } else {
+                        showToast(data.error || 'YouTube launch failed', true);
+                    }
+                } catch(e) {
+                    showToast('Network error — is the backend running?', true);
+                }
+
+                btn.disabled = false;
+                btn.textContent = 'Launch Campaign';
+                return;
+            }
+
+            // --- Meta (Facebook/Instagram) launch path ---
             // Use resolved data if available
             let objectStoryId = null;
             let contentType = 'post'; // default
@@ -1104,10 +1172,12 @@
                         errMsg = 'This carousel post has too many slides for Meta Ads (max 10). Try promoting a non-carousel post or one with fewer slides.';
                     } else if (errMsg.includes('Invalid Tagging') || errMsg.includes('invalid usage of tagging')) {
                         errMsg = 'This post has tagged users or is a collab post. Meta restricts boosting tagged/collab content — remove tags and try again.';
-                    } else if (errMsg.includes('Session has expired') || errMsg.includes('Error validating access token')) {
-                        errMsg = 'Meta access token has expired. Please refresh the token in Vercel environment variables.';
+                    } else if (errMsg.includes('Session has expired') || errMsg.includes('Error validating access token') || errMsg.includes('Malformed access token') || errMsg.includes('could not be decrypted')) {
+                        errMsg = 'Meta access token is invalid or expired. Use the Token Manager (🔑) to generate a new one and update Vercel.';
                     } else if (errMsg.includes("Page Post Can") && errMsg.includes("t Be Used") || errMsg.includes("promoted in an ad")) {
                         errMsg = "This post can't be promoted. It may contain copyrighted music, AR effects, or other restricted content. Try a different post, or boost it directly from Facebook.";
+                    } else if (errMsg.includes('ad creation failed:') && errMsg.trim().endsWith(':')) {
+                        errMsg = 'Campaign created but ad creative failed — the post may not be eligible for promotion. Check that the post is published and not restricted.';
                     }
                     showToast(errMsg, true);
                 }
@@ -1121,7 +1191,7 @@
 
         async function updateStatus(campaignId, action) {
             try {
-                const res = await fetch(`${API}/api/campaigns/status`, {
+                const res = await fetch(`${API}/api/campaigns`, {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({ campaign_id: campaignId, action })
@@ -1207,7 +1277,7 @@
         };
 
         function selectBudget(el) {
-            document.querySelectorAll('.budget-btn').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('#budget-selector .budget-btn').forEach(b => b.classList.remove('active'));
             el.classList.add('active');
             const budgetInput = document.getElementById('budget');
             if (el.dataset.amount === 'custom') {
@@ -1221,6 +1291,35 @@
                 document.getElementById('duration').value = BUDGET_DEFAULTS[amount] || 2;
             }
             refreshCampaignName();
+        }
+
+        // ─── YouTube Campaign Type Selector ───
+        function selectYtType(el) {
+            document.querySelectorAll('#yt-type-selector .budget-btn').forEach(b => b.classList.remove('active'));
+            el.classList.add('active');
+            const type = el.dataset.type;
+            document.getElementById('yt-type-hint').textContent = type === 'subscribers'
+                ? 'Optimizes for channel subscriptions via Demand Gen campaign'
+                : 'Optimizes for video views via Demand Gen campaign';
+            refreshCampaignName();
+            // Re-render preview badge if a YouTube URL is loaded
+            const url = document.getElementById('content-url').value.trim();
+            if (url && (url.includes('youtube.com') || url.includes('youtu.be'))) {
+                updateYtBadge();
+            }
+        }
+        function getSelectedYtType() {
+            const active = document.querySelector('#yt-type-selector .budget-btn.active');
+            return active ? active.dataset.type : 'views';
+        }
+        function updateYtBadge() {
+            const badge = document.querySelector('.preview-platform.plat-youtube');
+            if (!badge) return;
+            const ytType = getSelectedYtType();
+            const typeBadgeEl = badge.nextElementSibling;
+            if (typeBadgeEl && typeBadgeEl.style.background) {
+                typeBadgeEl.textContent = ytType === 'subscribers' ? 'DEMAND GEN · SUBSCRIBERS' : 'DEMAND GEN · VIDEO VIEWS';
+            }
         }
 
         // ─── Geo Search (PH Cities/Regions) ───
@@ -1310,7 +1409,7 @@
         }
 
         // ─── Post Resolution ───
-        let resolvedPost = null; // resolved data from /api/resolve-post
+        let resolvedPost = null; // resolved data from /api/resolve
 
         let resolveTimeout = null;
         function previewFromUrl(url) {
@@ -1328,21 +1427,43 @@
                 return;
             }
 
-            // Instant local preview while resolving
-            const isReel = /\/(reel|reels)\//i.test(url) || /\/videos\//i.test(url);
+            // Detect platform
+            const isYouTube = url.includes('youtube.com') || url.includes('youtu.be');
+            const isReel = !isYouTube && (/\/(reel|reels)\//i.test(url) || /\/videos\//i.test(url));
             const isIG = url.includes('instagram.com');
-            const platClass = isIG ? 'plat-instagram' : 'plat-facebook';
-            const platLabel = isIG ? 'INSTAGRAM' : 'FACEBOOK';
-            const typeLabel = isReel ? 'REEL' : 'POST';
-            const typeBadge = isReel
-                ? '<span style="background:#6c5ce7;color:#fff;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;margin-left:6px;">VIDEO VIEWS · THRUPLAY</span>'
-                : '<span style="background:#00b894;color:#fff;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;margin-left:6px;">POST ENGAGEMENT</span>';
+
+            // Platform badge + type badge
+            let platClass, platLabel, typeLabel, typeBadge;
+            if (isYouTube) {
+                platClass = 'plat-youtube';
+                platLabel = 'YOUTUBE';
+                typeLabel = url.includes('/shorts/') ? 'SHORT' : 'VIDEO';
+                const ytType = getSelectedYtType();
+                typeBadge = ytType === 'subscribers'
+                    ? '<span style="background:#c4302b;color:#fff;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;margin-left:6px;">DEMAND GEN · SUBSCRIBERS</span>'
+                    : '<span style="background:#c4302b;color:#fff;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;margin-left:6px;">DEMAND GEN · VIDEO VIEWS</span>';
+            } else {
+                platClass = isIG ? 'plat-instagram' : 'plat-facebook';
+                platLabel = isIG ? 'INSTAGRAM' : 'FACEBOOK';
+                typeLabel = isReel ? 'REEL' : 'POST';
+                typeBadge = isReel
+                    ? '<span style="background:#6c5ce7;color:#fff;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;margin-left:6px;">VIDEO VIEWS · THRUPLAY</span>'
+                    : '<span style="background:#00b894;color:#fff;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;margin-left:6px;">POST ENGAGEMENT</span>';
+            }
+
+            // Toggle visibility of Meta-only fields
+            const politicalRow = document.getElementById('political-toggle').closest('.toggle-row') || document.getElementById('political-toggle').parentElement;
+            const geoWrap = document.getElementById('geo-search-wrap');
+            if (politicalRow) politicalRow.style.display = isYouTube ? 'none' : '';
+            if (geoWrap) geoWrap.style.display = isYouTube ? 'none' : '';
+            const ytTypeRow = document.getElementById('yt-campaign-type');
+            if (ytTypeRow) ytTypeRow.style.display = isYouTube ? '' : 'none';
 
             preview.innerHTML = `
                 <div class="preview-body">
                     <span class="preview-platform ${platClass}">${platLabel} · ${typeLabel}</span>${typeBadge}
                     <div class="preview-caption" style="word-break:break-all;margin-top:8px;">${url}</div>
-                    <div class="preview-id" style="color:#8a9bab;">Resolving post ID...</div>
+                    <div class="preview-id" style="color:#8a9bab;">${isYouTube ? 'Resolving video...' : 'Resolving post ID...'}</div>
                 </div>
             `;
             preview.classList.add('open');
@@ -1351,21 +1472,59 @@
             // Debounce the API call
             clearTimeout(resolveTimeout);
             resolveTimeout = setTimeout(async () => {
+                // --- YouTube resolution ---
+                if (isYouTube) {
+                    try {
+                        const res = await fetch(`${API}/api/resolve?url=${encodeURIComponent(url)}`);
+                        const data = await res.json();
+                        resolvedPost = data;
+                        refreshCampaignName();
+
+                        if (data.resolved) {
+                            const thumbHtml = data.thumbnail ? `<img class="preview-thumb" src="${data.thumbnail}" alt="" onerror="this.style.display='none'" />` : '';
+                            const warningsHtml = (data.warnings || []).map(w =>
+                                `<div class="preview-id" style="color:#e74c3c;margin-top:4px;">⚠ ${w}</div>`
+                            ).join('');
+                            const channelInfo = data.channel ? ` · ${data.channel}` : '';
+                            preview.innerHTML = `
+                                ${thumbHtml}
+                                <div class="preview-body">
+                                    <span class="preview-platform ${platClass}">${platLabel} · ${typeLabel}${channelInfo}</span>${typeBadge}
+                                    <div class="preview-caption">${data.title || url}</div>
+                                    <div class="preview-id" style="color:#0a8f6f;">✓ Resolved — Video ID: ${data.video_id} (${data.source})</div>
+                                    ${warningsHtml}
+                                </div>
+                            `;
+                        } else {
+                            preview.innerHTML = `
+                                <div class="preview-body">
+                                    <span class="preview-platform ${platClass}">${platLabel} · ${typeLabel}</span>${typeBadge}
+                                    <div class="preview-caption" style="word-break:break-all;">${url}</div>
+                                    <div class="preview-id" style="color:#e74c3c;">⚠ ${data.error || 'Could not resolve YouTube video'}</div>
+                                </div>
+                            `;
+                        }
+                    } catch (e) {
+                        preview.innerHTML = `
+                            <div class="preview-body">
+                                <span class="preview-platform ${platClass}">${platLabel} · ${typeLabel}</span>${typeBadge}
+                                <div class="preview-caption" style="word-break:break-all;">${url}</div>
+                                <div class="preview-id" style="color:#e74c3c;">⚠ Could not connect to YouTube resolver</div>
+                            </div>
+                        `;
+                    }
+                    return;
+                }
+
+                // --- Meta (Facebook/Instagram) resolution ---
                 try {
-                    const res = await fetch(`${API}/api/resolve-post?url=${encodeURIComponent(url)}`);
+                    const res = await fetch(`${API}/api/resolve?url=${encodeURIComponent(url)}`);
                     const data = await res.json();
                     resolvedPost = data;
                     refreshCampaignName();
 
                     if (data.resolved) {
                         document.getElementById('post-id').value = data.post_id || data.ig_media_id || '';
-                        // Update content type from server response (detects video/reel even for /p/ URLs)
-                        if (data.content_type) contentType = data.content_type;
-                        const resolvedIsReel = data.content_type === 'reel' || data.media_type === 'VIDEO';
-                        const resolvedTypeLabel = resolvedIsReel ? 'REEL' : (data.media_type === 'CAROUSEL_ALBUM' ? 'CAROUSEL' : 'POST');
-                        const resolvedTypeBadge = resolvedIsReel
-                            ? '<span style="background:#6c5ce7;color:#fff;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;margin-left:6px;">VIDEO VIEWS · THRUPLAY</span>'
-                            : '<span style="background:#00b894;color:#fff;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;margin-left:6px;">POST ENGAGEMENT</span>';
                         const thumbHtml = data.thumbnail ? `<img class="preview-thumb" src="${data.thumbnail}" alt="" />` : '';
                         const idLabel = data.post_id ? `Post ID: ${data.post_id}` : data.ig_media_id ? `IG Media: ${data.ig_media_id}` : '';
                         const sourceLabel = data.source ? ` (${data.source})` : '';
@@ -1378,7 +1537,7 @@
                         preview.innerHTML = `
                             ${thumbHtml}
                             <div class="preview-body">
-                                <span class="preview-platform ${platClass}">${platLabel} · ${resolvedTypeLabel}${mediaInfo}</span>${resolvedTypeBadge}
+                                <span class="preview-platform ${platClass}">${platLabel} · ${typeLabel}${mediaInfo}</span>${typeBadge}
                                 <div class="preview-caption">${data.caption || url}</div>
                                 <div class="preview-id" style="color:#0a8f6f;">✓ Resolved — ${idLabel}${sourceLabel}</div>
                                 ${warningsHtml}
