@@ -57,11 +57,13 @@ module.exports = async function handler(req, res) {
     const activeCount = campaigns.filter(c => {
       if (!campaignsWithActiveAdsets.has(c.id)) return false;
       if (c.stop_time && new Date(c.stop_time) < now) return false;
+      // Only count campaigns that are actually delivering (have spend)
+      const spent = spendMap[c.id] || 0;
+      if (spent <= 0) return false;
       let totalBudget = null;
       if (c.lifetime_budget) totalBudget = parseInt(c.lifetime_budget) / 100;
       else if (c.daily_budget) totalBudget = parseInt(c.daily_budget) / 100;
       else if (budgetMap[c.id]) totalBudget = budgetMap[c.id];
-      const spent = spendMap[c.id] || 0;
       if (totalBudget && spent >= totalBudget) return false;
       return true;
     }).length;
@@ -94,9 +96,9 @@ module.exports = async function handler(req, res) {
         const today = formatDateForGoogle(new Date());
         const monthStart = today.substring(0, 8) + '01';
 
-        // Active campaigns count
+        // Delivering campaigns count (ENABLED + has spend)
         const activeResult = await googleAdsQuery(
-          `SELECT campaign.id FROM campaign WHERE campaign.status = 'ENABLED' AND campaign.end_date >= '${today}'`
+          `SELECT campaign.id, metrics.cost_micros FROM campaign WHERE campaign.status = 'ENABLED' AND campaign.end_date >= '${today}' AND metrics.cost_micros > 0`
         );
         if (Array.isArray(activeResult)) {
           for (const batch of activeResult) {

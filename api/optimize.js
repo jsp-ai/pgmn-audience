@@ -83,20 +83,29 @@ module.exports = async function handler(req, res) {
           metrics.stop_time = camp.stop_time;
           metrics.objective = camp.objective;
 
-          // Get adset budget info for this campaign
+          // Get adset budget info and check if actually delivering
+          let hasActiveAdset = false;
           try {
             const adsets = await metaGet(`${AD_ACCOUNT_ID}/adsets`, {
-              fields: 'id,lifetime_budget,daily_budget,end_time',
+              fields: 'id,lifetime_budget,daily_budget,end_time,effective_status',
               filtering: JSON.stringify([{ field: 'campaign.id', operator: 'IN', value: [camp.id] }]),
               limit: '10'
             });
             const adsetList = adsets.data || [];
+            hasActiveAdset = adsetList.some(as => as.effective_status === 'ACTIVE');
             metrics.total_budget = adsetList.reduce((sum, as) =>
               sum + (parseInt(as.lifetime_budget || as.daily_budget || '0') / 100), 0);
             metrics.adset_count = adsetList.length;
             if (adsetList[0]?.end_time) metrics.end_time = adsetList[0].end_time;
           } catch (e) { /* skip budget lookup */ }
 
+          // Skip campaigns that aren't actually delivering
+          const now = new Date();
+          const pastEnd = camp.stop_time && new Date(camp.stop_time) < now;
+          const budgetSpent = metrics.total_budget && metrics.spend >= metrics.total_budget;
+          if (!hasActiveAdset || pastEnd || budgetSpent) continue;
+
+          metrics.delivering = true;
           campaignData.push(metrics);
         }
       } catch (e) {
