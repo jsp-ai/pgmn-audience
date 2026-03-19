@@ -1091,10 +1091,10 @@
                 const res = await fetch(`${API}/api/campaigns`);
                 const data = await res.json();
                 allCampaigns = data.data || [];
-                filterCampaigns(currentPlatformFilter);
+                renderCampaigns(allCampaigns);
             } catch (e) {
                 document.getElementById('campaign-list').innerHTML =
-                    '<div class="empty">Could not connect to backend. Make sure the server is running on port 3000.</div>';
+                    `<div class="empty">Could not load campaigns: ${e.message}</div>`;
             }
         }
 
@@ -1116,7 +1116,8 @@
         function filterCampaigns(filter) {
             currentPlatformFilter = filter;
             document.querySelectorAll('.platform-filter-btn').forEach(b => b.classList.remove('active'));
-            document.querySelector(`.platform-filter-btn[data-filter="${filter}"]`).classList.add('active');
+            const activeBtn = document.querySelector(`.platform-filter-btn[data-filter="${filter}"]`);
+            if (activeBtn) activeBtn.classList.add('active');
             if (filter === 'all') {
                 renderCampaigns(allCampaigns);
             } else {
