@@ -653,6 +653,165 @@
             75% { transform: translateX(8px); }
         }
         .app-wrapper.locked { display: none; }
+
+        /* ─── Tab Navigation ─── */
+        .tab-nav {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 16px 24px 0;
+            display: flex;
+            gap: 8px;
+        }
+        .tab-btn {
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: 14px;
+            letter-spacing: 1.5px;
+            padding: 8px 20px;
+            border-radius: 6px;
+            border: 1px solid #E0E4E8;
+            background: transparent;
+            color: #52657F;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .tab-btn:hover { border-color: #52657F; color: #162831; }
+        .tab-btn.active {
+            background: #FB041C;
+            color: #fff;
+            border-color: #FB041C;
+        }
+        .tab-content { display: none; }
+        .tab-content.active { display: flex; flex-direction: column; gap: 24px; }
+
+        /* ─── Optimization Tab ─── */
+        .portfolio-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 4px;
+            margin-bottom: 16px;
+        }
+        .portfolio-grid .metric { text-align: center; padding: 8px 4px; }
+        .portfolio-grid .metric .val {
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: 22px;
+            letter-spacing: 0.5px;
+            color: #162831;
+        }
+        .portfolio-grid .metric .val.target-good { color: #0a8f6f; }
+        .portfolio-grid .metric .val.target-mid { color: #B08C00; }
+        .portfolio-grid .metric .val.target-low { color: #FB041C; }
+        .portfolio-grid .metric .lbl {
+            font-size: 9px;
+            color: #8a9bab;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-top: 2px;
+        }
+        .opt-summary {
+            background: #F7F8FA;
+            border: 1px solid #E0E4E8;
+            border-radius: 8px;
+            padding: 14px 16px;
+            font-size: 13px;
+            color: #52657F;
+            line-height: 1.5;
+            margin-bottom: 16px;
+        }
+        .opt-summary strong { color: #162831; }
+        .rec-card {
+            background: #F7F8FA;
+            border: 1px solid #E0E4E8;
+            border-radius: 8px;
+            padding: 14px 16px;
+            margin-bottom: 8px;
+        }
+        .rec-card .rec-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 6px;
+        }
+        .rec-card .rec-name {
+            font-weight: 600;
+            font-size: 13px;
+            color: #162831;
+            flex: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            margin-right: 8px;
+        }
+        .rec-card .rec-reason {
+            font-size: 12px;
+            color: #52657F;
+            margin-bottom: 4px;
+        }
+        .rec-card .rec-detail {
+            font-size: 11px;
+            color: #0a8f6f;
+            font-weight: 600;
+        }
+        .rec-perf {
+            font-size: 11px;
+            color: #8a9bab;
+            margin-right: 6px;
+        }
+        .badge-scale { background: rgba(10,143,111,0.12); color: #0a8f6f; }
+        .badge-extend { background: rgba(124,92,191,0.12); color: #7c5cbf; }
+        .badge-ab_test { background: rgba(59,130,246,0.12); color: #2563EB; }
+        .badge-maintain { background: rgba(176,140,0,0.12); color: #B08C00; }
+        .opt-action-badge {
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: 11px;
+            letter-spacing: 1px;
+            padding: 2px 8px;
+            border-radius: 3px;
+            text-transform: uppercase;
+        }
+        .history-entry {
+            background: #F7F8FA;
+            border: 1px solid #E0E4E8;
+            border-radius: 8px;
+            padding: 12px 16px;
+            margin-bottom: 8px;
+            cursor: pointer;
+            transition: border-color 0.2s;
+        }
+        .history-entry:hover { border-color: #52657F; }
+        .history-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .history-date {
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: 14px;
+            letter-spacing: 1px;
+            color: #162831;
+        }
+        .history-stats {
+            display: flex;
+            gap: 12px;
+            font-size: 11px;
+            color: #52657F;
+        }
+        .history-detail { display: none; margin-top: 12px; }
+        .history-entry.open .history-detail { display: block; }
+        .btn-run-opt {
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: 16px;
+            letter-spacing: 1.5px;
+            padding: 12px 24px;
+            background: #FB041C;
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            width: 100%;
+            transition: all 0.2s;
+        }
+        .btn-run-opt:hover { background: #d9031a; transform: translateY(-1px); box-shadow: 0 4px 16px rgba(251,4,28,0.25); }
+        .btn-run-opt:disabled { background: #8a9bab; cursor: not-allowed; transform: none; box-shadow: none; }
     </style>
 </head>
 <body>
@@ -717,7 +876,15 @@
       </div>
     </div>
 
+    <div class="tab-nav">
+        <button class="tab-btn active" onclick="switchTab('launch')">Launch Campaign</button>
+        <button class="tab-btn" onclick="switchTab('optimize')">Optimization</button>
+    </div>
+
     <div class="container">
+        <!-- ═══ LAUNCH TAB ═══ -->
+        <div id="launch-tab" class="tab-content active">
+
         <!-- Launch Panel -->
             <div class="panel">
                 <h2><div class="dot"></div> Launch Campaign</h2>
@@ -817,6 +984,46 @@
                     <div class="loading"><div class="spinner"></div> Loading campaigns...</div>
                 </div>
             </div>
+
+        </div><!-- end #launch-tab -->
+
+        <!-- ═══ OPTIMIZE TAB ═══ -->
+        <div id="optimize-tab" class="tab-content">
+
+            <!-- Portfolio Score -->
+            <div class="panel">
+                <h2><div class="dot"></div> Portfolio Performance</h2>
+                <div id="portfolio-score">
+                    <div class="portfolio-grid">
+                        <div class="metric"><div class="val" id="ps-spend">--</div><div class="lbl">Total Spend</div></div>
+                        <div class="metric"><div class="val" id="ps-eng">--</div><div class="lbl">Engagements</div></div>
+                        <div class="metric"><div class="val" id="ps-views">--</div><div class="lbl">Views</div></div>
+                        <div class="metric"><div class="val" id="ps-follows">--</div><div class="lbl">Follows</div></div>
+                        <div class="metric"><div class="val" id="ps-epp">--</div><div class="lbl">Eng/Peso</div></div>
+                        <div class="metric"><div class="val" id="ps-target">--</div><div class="lbl">vs Target</div></div>
+                    </div>
+                    <div id="opt-summary" class="opt-summary" style="display:none;"></div>
+                    <button class="btn-run-opt" id="btn-run-opt" onclick="runOptimization()">Run Optimization Analysis</button>
+                </div>
+            </div>
+
+            <!-- AI Recommendations -->
+            <div class="panel ai-panel" id="opt-recs-panel" style="display:none;">
+                <h2><span class="ai-badge">AI</span> Recommendations</h2>
+                <div id="opt-advice" style="display:none;margin-bottom:16px;"></div>
+                <div id="opt-recs-list"></div>
+            </div>
+
+            <!-- History -->
+            <div class="panel">
+                <h2><div class="dot"></div> Optimization History</h2>
+                <div id="opt-history">
+                    <div class="empty">No optimization runs yet. Click "Run Optimization Analysis" above.</div>
+                </div>
+            </div>
+
+        </div><!-- end #optimize-tab -->
+
     </div>
 
     <div class="toast" id="toast"></div>
@@ -1574,6 +1781,147 @@
         }
 
         // Load on page load only (no auto-refresh to avoid Meta API rate limits)
+        // ─── Tab Navigation ───
+        function switchTab(tab) {
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+            document.getElementById(tab + '-tab').classList.add('active');
+            document.querySelector(`.tab-btn[onclick*="${tab}"]`).classList.add('active');
+            if (tab === 'optimize') renderHistory();
+        }
+
+        // ─── Optimization ───
+        async function runOptimization() {
+            const btn = document.getElementById('btn-run-opt');
+            btn.disabled = true;
+            btn.textContent = 'Analyzing campaigns...';
+            try {
+                const res = await fetch(`${API}/api/optimize?dry_run=true`);
+                const data = await res.json();
+                renderOptimizationResult(data);
+                // Save to history
+                const history = JSON.parse(localStorage.getItem('pgmn_opt_history') || '[]');
+                history.unshift({ timestamp: new Date().toISOString(), data });
+                if (history.length > 30) history.length = 30;
+                localStorage.setItem('pgmn_opt_history', JSON.stringify(history));
+                renderHistory();
+                showToast('Optimization analysis complete');
+            } catch (e) {
+                showToast('Optimization failed: ' + e.message, true);
+            }
+            btn.disabled = false;
+            btn.textContent = 'Run Optimization Analysis';
+        }
+
+        function renderOptimizationResult(data) {
+            const ai = data.ai_analysis || {};
+            const ps = ai.portfolio_score || {};
+
+            // Portfolio score
+            document.getElementById('ps-spend').textContent = '₱' + formatNum(ps.total_spend || 0);
+            document.getElementById('ps-eng').textContent = formatNum(ps.total_engagements || 0);
+            document.getElementById('ps-views').textContent = formatNum(ps.total_views || 0);
+            document.getElementById('ps-follows').textContent = formatNum(ps.total_follows || 0);
+            document.getElementById('ps-epp').textContent = ps.overall_eng_per_peso || '--';
+            const targetPct = parseFloat(ps.vs_target) || 0;
+            const targetEl = document.getElementById('ps-target');
+            targetEl.textContent = ps.vs_target || '--';
+            targetEl.className = 'val ' + (targetPct >= 100 ? 'target-good' : targetPct >= 60 ? 'target-mid' : 'target-low');
+
+            // Summary
+            const summaryEl = document.getElementById('opt-summary');
+            if (ai.summary) {
+                summaryEl.innerHTML = `<strong>Summary:</strong> ${ai.summary}`;
+                summaryEl.style.display = 'block';
+            }
+
+            // Advice panel
+            const adviceEl = document.getElementById('opt-advice');
+            if (ai.budget_strategy || ai.content_advice || ai.performance_gap) {
+                adviceEl.innerHTML = `
+                    ${ai.performance_gap ? `<div class="opt-summary"><strong>Performance Gap:</strong> ${ai.performance_gap}</div>` : ''}
+                    ${ai.budget_strategy ? `<div class="opt-summary"><strong>Budget Strategy:</strong> ${ai.budget_strategy}</div>` : ''}
+                    ${ai.content_advice ? `<div class="opt-summary"><strong>Content Advice:</strong> ${ai.content_advice}</div>` : ''}
+                `;
+                adviceEl.style.display = 'block';
+            }
+
+            // Recommendations
+            const recs = ai.recommendations || [];
+            const recsPanel = document.getElementById('opt-recs-panel');
+            const recsList = document.getElementById('opt-recs-list');
+            if (recs.length) {
+                recsPanel.style.display = 'block';
+                recsList.innerHTML = recs.map(r => {
+                    const badgeClass = 'badge-' + (r.action || '').toLowerCase();
+                    let detail = '';
+                    if (r.new_budget) detail = `→ budget: ₱${formatNum(r.new_budget)}`;
+                    if (r.new_end_date) detail = `→ extend to: ${r.new_end_date}`;
+                    if (r.ab_test_type) detail = `→ A/B test: ${r.ab_test_type}`;
+                    return `<div class="rec-card">
+                        <div class="rec-top">
+                            <div class="rec-name">${r.campaign_name || 'Unknown'}</div>
+                            <span class="rec-perf">${r.current_performance || ''}</span>
+                            <span class="opt-action-badge ${badgeClass}">${r.action}</span>
+                        </div>
+                        <div class="rec-reason">${r.reason || ''}</div>
+                        ${detail ? `<div class="rec-detail">${detail}</div>` : ''}
+                    </div>`;
+                }).join('');
+            }
+        }
+
+        function renderHistory() {
+            const history = JSON.parse(localStorage.getItem('pgmn_opt_history') || '[]');
+            const container = document.getElementById('opt-history');
+            if (!history.length) {
+                container.innerHTML = '<div class="empty">No optimization runs yet. Click "Run Optimization Analysis" above.</div>';
+                return;
+            }
+            container.innerHTML = history.map((entry, i) => {
+                const d = new Date(entry.timestamp);
+                const dateStr = d.toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' }) +
+                    ' ' + d.toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit' });
+                const ai = entry.data?.ai_analysis || {};
+                const ps = ai.portfolio_score || {};
+                const recs = ai.recommendations || [];
+                const scaleCount = recs.filter(r => r.action === 'SCALE').length;
+                const extendCount = recs.filter(r => r.action === 'EXTEND').length;
+                const abCount = recs.filter(r => r.action === 'AB_TEST').length;
+
+                const recsSummary = recs.slice(0, 5).map(r => {
+                    const badgeClass = 'badge-' + (r.action || '').toLowerCase();
+                    let detail = '';
+                    if (r.new_budget) detail = ` → ₱${formatNum(r.new_budget)}`;
+                    if (r.new_end_date) detail = ` → ${r.new_end_date}`;
+                    if (r.ab_test_type) detail = ` → ${r.ab_test_type}`;
+                    return `<div style="font-size:12px;padding:4px 0;display:flex;align-items:center;gap:6px;">
+                        <span class="opt-action-badge ${badgeClass}" style="font-size:9px;padding:1px 6px;">${r.action}</span>
+                        <span style="color:#162831;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${r.campaign_name || ''}</span>
+                        <span style="color:#0a8f6f;font-size:11px;font-weight:600;">${detail}</span>
+                    </div>`;
+                }).join('');
+
+                return `<div class="history-entry" onclick="this.classList.toggle('open')">
+                    <div class="history-header">
+                        <div class="history-date">${dateStr}</div>
+                        <div class="history-stats">
+                            <span>Eng/₱: ${ps.overall_eng_per_peso || '--'}</span>
+                            <span>Target: ${ps.vs_target || '--'}</span>
+                            ${scaleCount ? `<span class="opt-action-badge badge-scale" style="font-size:9px;padding:1px 6px;">${scaleCount} SCALE</span>` : ''}
+                            ${extendCount ? `<span class="opt-action-badge badge-extend" style="font-size:9px;padding:1px 6px;">${extendCount} EXTEND</span>` : ''}
+                            ${abCount ? `<span class="opt-action-badge badge-ab_test" style="font-size:9px;padding:1px 6px;">${abCount} A/B</span>` : ''}
+                        </div>
+                    </div>
+                    <div class="history-detail">
+                        ${ai.summary ? `<div class="opt-summary" style="margin-top:8px;"><strong>Summary:</strong> ${ai.summary}</div>` : ''}
+                        ${recsSummary}
+                        ${recs.length > 5 ? `<div style="font-size:11px;color:#8a9bab;margin-top:4px;">+ ${recs.length - 5} more recommendations</div>` : ''}
+                    </div>
+                </div>`;
+            }).join('');
+        }
+
         loadCampaigns();
         loadStats();
     </script>
