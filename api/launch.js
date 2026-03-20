@@ -337,18 +337,19 @@ async function launchMeta(req, res) {
 
     const name = campaign_name || `PGMN Campaign - ${budget_php}PHP ${duration_days}d`;
 
-    // Determine objective & optimization based on content type
-    // Videos/reels (both FB and IG): OUTCOME_AWARENESS + THRUPLAY for video views
-    // Photos/text: OUTCOME_ENGAGEMENT + POST_ENGAGEMENT for post engagement
+    // Determine optimization based on content type
+    // All content uses OUTCOME_ENGAGEMENT objective
+    // Videos/reels: THRUPLAY (maximize video views under engagement)
+    // Photos/text: POST_ENGAGEMENT (maximize likes/comments/shares)
     const isReel = content_type === 'reel';
-    const objective = isReel ? 'OUTCOME_AWARENESS' : 'OUTCOME_ENGAGEMENT';
+    const objective = 'OUTCOME_ENGAGEMENT';
     const optimizationGoal = isReel ? 'THRUPLAY' : 'POST_ENGAGEMENT';
 
     // 1. Create campaign
     const campaignParams = {
       name, objective, status: 'ACTIVE',
       special_ad_categories: political ? '["ISSUES_ELECTIONS_POLITICS"]' : '[]',
-      is_adset_budget_sharing_enabled: 'false'
+      is_adset_budget_sharing_enabled: 'true'
     };
     if (political) {
       const targetCountries = countries && countries.length ? countries : ['PH'];
@@ -403,8 +404,8 @@ async function launchMeta(req, res) {
         start_time: fmt(now), end_time: fmt(end),
         targeting: JSON.stringify(t), status: 'ACTIVE'
       };
-      // Set destination_type: UNDEFINED for all video/reel ads (FB & IG), ON_POST for photos
-      if (isReel) adsetParams.destination_type = 'UNDEFINED';
+      // Set destination_type: ON_AD for video/reel ads (engagement on ad), ON_POST for photos
+      if (isReel) adsetParams.destination_type = 'ON_AD';
       else adsetParams.destination_type = 'ON_POST';
       const adset = await metaPost(`${AD_ACCOUNT_ID}/adsets`, adsetParams);
       if (adset.error) {

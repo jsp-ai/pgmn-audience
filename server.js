@@ -661,18 +661,19 @@ async function launchCampaign(body) {
   } = body;
   const name = campaign_name || `PGMN Campaign - ${budget_php}PHP ${duration_days}d`;
 
-  // Determine objective & optimization based on content type
-  // Videos/reels (both FB and IG): OUTCOME_AWARENESS + THRUPLAY for video views
-  // Photos/text: OUTCOME_ENGAGEMENT + POST_ENGAGEMENT for post engagement
+  // Determine optimization based on content type
+  // All content uses OUTCOME_ENGAGEMENT objective
+  // Videos/reels: THRUPLAY (maximize video views under engagement)
+  // Photos/text: POST_ENGAGEMENT (maximize likes/comments/shares)
   const isReel = content_type === 'reel';
-  const objective = isReel ? 'OUTCOME_AWARENESS' : 'OUTCOME_ENGAGEMENT';
+  const objective = 'OUTCOME_ENGAGEMENT';
   const optimizationGoal = isReel ? 'THRUPLAY' : 'POST_ENGAGEMENT';
 
   // 1. Create campaign
   const campaignParams = {
     name, objective, status: 'ACTIVE',
     special_ad_categories: political ? '["ISSUES_ELECTIONS_POLITICS"]' : '[]',
-    is_adset_budget_sharing_enabled: 'false'
+    is_adset_budget_sharing_enabled: 'true'
   };
   if (political) {
     const targetC = countries && countries.length ? countries : ['PH'];
@@ -727,7 +728,7 @@ async function launchCampaign(body) {
       lifetime_budget: String(Math.round(budgetPhp * 100)),
       bid_strategy: 'LOWEST_COST_WITHOUT_CAP',
       optimization_goal: optimizationGoal, billing_event: 'IMPRESSIONS',
-      destination_type: isReel ? (use_ig_media ? 'ON_AD' : 'UNDEFINED') : 'ON_POST',
+      destination_type: isReel ? 'ON_AD' : 'ON_POST',
       start_time: fmt(now), end_time: fmt(end),
       targeting: JSON.stringify(t), status: 'ACTIVE'
     };

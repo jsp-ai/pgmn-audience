@@ -1153,6 +1153,12 @@
                 const res = await fetch(`${API}/api/campaigns`);
                 const data = await res.json();
                 allCampaigns = data.data || [];
+                // Update delivering count from actual campaign data
+                const deliveringCount = allCampaigns.filter(c => {
+                    const i = c.insights || {};
+                    return c.status === 'ACTIVE' && (i.spend > 0 || i.impressions > 0);
+                }).length;
+                document.getElementById('stat-live').textContent = deliveringCount;
                 renderCampaigns(allCampaigns);
             } catch (e) {
                 document.getElementById('campaign-list').innerHTML =
@@ -1164,7 +1170,7 @@
             try {
                 const res = await fetch(`${API}/api/stats`);
                 const data = await res.json();
-                document.getElementById('stat-live').textContent = data.active_count || 0;
+                // active_count is now derived from campaign data in loadCampaigns()
                 document.getElementById('stat-daily').textContent = formatNum(data.total_daily_spend) + ' PHP';
                 document.getElementById('stat-monthly').textContent = formatNum(data.total_monthly_spend) + ' PHP';
             } catch(e) {}
@@ -1197,6 +1203,13 @@
 
         function renderCampaigns(campaigns) {
             const list = document.getElementById('campaign-list');
+            // Only show delivering campaigns (ACTIVE with metrics)
+            campaigns = campaigns.filter(c => {
+                const i = c.insights || {};
+                const hasMetrics = i.spend > 0 || i.impressions > 0;
+                const isSubmitted = c.status === 'ACTIVE' && !hasMetrics;
+                return !isSubmitted;
+            });
             if (!campaigns.length) {
                 list.innerHTML = '<div class="empty">No campaigns found</div>';
                 return;

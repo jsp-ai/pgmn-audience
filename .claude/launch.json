@@ -3,7 +3,7 @@
   "configurations": [
     {
       "name": "backend",
-      "runtimeExecutable": "node",
+      "runtimeExecutable": "/Users/jonathonsanpedro/.nvm/versions/node/v22.16.0/bin/node",
       "runtimeArgs": ["server.js"],
       "port": 3000
     }
